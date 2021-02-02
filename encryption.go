@@ -85,10 +85,12 @@ func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
 
 func (k *Keypair) VerifyJWT(token string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-		if kid, ok := token.Header["kid"]; ok {
-			if k.KeyID() == kid {
-				return k.PublicKey, nil
-			}
+		kid, err := k.KeyID()
+		if err != nil {
+			return nil, err
+		}
+		if tk, ok := token.Header["kid"]; ok && tk == kid {
+			return k.PublicKey, nil
 		}
 		return nil, errors.New("token kid does not match or is not present")
 	})
