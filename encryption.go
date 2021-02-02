@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+
 	"github.com/dgrijalva/jwt-go"
 	"gopkg.in/square/go-jose.v2"
 )
@@ -86,7 +87,7 @@ func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
 func (k *Keypair) VerifyJWT(token string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		if kid, ok := token.Header["kid"]; ok {
-			if k.KeyID() == kid {
+			if kKid, _ := k.KeyID(); kKid == kid {
 				return k.PublicKey, nil
 			}
 		}
