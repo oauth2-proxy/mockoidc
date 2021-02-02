@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+
 	"github.com/dgrijalva/jwt-go"
 	"gopkg.in/square/go-jose.v2"
 )
@@ -35,7 +36,7 @@ func (k *Keypair) KeyID() (string, error) {
 		return k.Kid, nil
 	}
 
-	publicKeyDERBytes, err := x509.MarshalPKIXPublicKey(*k.PublicKey)
+	publicKeyDERBytes, err := x509.MarshalPKIXPublicKey(k.PublicKey)
 	if err != nil {
 		return "", err
 	}
