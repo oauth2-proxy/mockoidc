@@ -16,12 +16,13 @@ type SessionStore struct {
 	Store map[string]*Session
 }
 
+// NewSession returns a pointer to a new Session struct
 func NewSession(sessionID string, scopes []string, oAuthState string, oidcNonce string) (*Session, error) {
 	session := Session{
 		SessionID:  sessionID,
 		OAuthState: oAuthState,
 		OIDCNonce:  oidcNonce,
-		User:       DEFAULT_USER,
+		User:       &DEFAULT_USER,
 	}
 	return &session, nil
 }

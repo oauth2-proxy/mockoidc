@@ -7,10 +7,11 @@ type User struct {
 	Name  string `json: name`
 }
 
-const (
-	DEFAULT_USER = User(
+var (
+	// DEFAULT_USER is a User struct that can be used wherever a user is needed
+	DEFAULT_USER = User{
 		Email: "user@example.com",
 		Phone: "555-555-1212",
-		Name: "Jon Snow"
-	)
+		Name:  "Jon Snow",
+	}
 )
