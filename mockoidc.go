@@ -21,11 +21,11 @@ type MockOIDC struct {
 }
 
 func NewMockOIDC() (*MockOIDC, error) {
-	clientID, err := randomSecret(32)
+	clientID, err := nonce(24)
 	if err != nil {
 		return nil, err
 	}
-	clientSecret, err := randomSecret(32)
+	clientSecret, err := nonce(24)
 	if err != nil {
 		return nil, err
 	}
