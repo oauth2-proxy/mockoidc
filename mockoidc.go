@@ -2,6 +2,7 @@ package mockoidc
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -24,8 +25,8 @@ type MockOIDC struct {
 	ClientID     string
 	ClientSecret string
 
-	AccessTTL  int
-	RefreshTTL int
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
 
 	Keypair *Keypair
 
@@ -39,11 +40,11 @@ type Config struct {
 	ClientSecret string
 	Issuer       string
 
-	AccessTTL  int
-	RefreshTTL int
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
 }
 
-func NewServer() (*MockOIDC, error) {
+func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 	clientID, err := nonce(24)
 	if err != nil {
 		return nil, err
@@ -52,7 +53,7 @@ func NewServer() (*MockOIDC, error) {
 	if err != nil {
 		return nil, err
 	}
-	keypair, err := RandomKeypair(2048)
+	keypair, err := NewKeypair(key)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +61,8 @@ func NewServer() (*MockOIDC, error) {
 	return &MockOIDC{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		AccessTTL:    600,
-		RefreshTTL:   3600,
+		AccessTTL:    time.Duration(10) * time.Minute,
+		RefreshTTL:   time.Duration(60) * time.Minute,
 		Keypair:      keypair,
 	}, nil
 }
@@ -71,7 +72,7 @@ func Run() (*MockOIDC, error) {
 }
 
 func RunTLS(cfg *tls.Config) (*MockOIDC, error) {
-	m, err := NewServer()
+	m, err := NewServer(nil)
 	if err != nil {
 		return nil, err
 	}
