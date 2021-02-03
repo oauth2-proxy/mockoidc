@@ -75,14 +75,14 @@ func RunTLS(cfg *tls.Config) (*MockOIDC, error) {
 	if err != nil {
 		return nil, err
 	}
-	port, err := availablePort()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
-	return m, m.Start(fmt.Sprintf("127.0.0.1:%s", port), cfg)
+	return m, m.Start(ln, cfg)
 }
 
-func (m *MockOIDC) Start(addr string, tlsConfig *tls.Config) error {
+func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	if m.server != nil {
 		return errors.New("server already started")
 	}
@@ -91,14 +91,14 @@ func (m *MockOIDC) Start(addr string, tlsConfig *tls.Config) error {
 	handler.HandleFunc(authorizeEndpoint, m.Authorize)
 
 	m.server = &http.Server{
-		Addr:      addr,
+		Addr:      ln.Addr().String(),
 		Handler:   handler,
-		TLSConfig: tlsConfig,
+		TLSConfig: cfg,
 	}
 
 	go func() {
-		err := m.server.ListenAndServe()
-		if err != nil {
+		err := m.server.Serve(ln)
+		if err != nil && err != http.ErrServerClosed {
 			panic(err)
 		}
 	}()
@@ -148,16 +148,4 @@ func (m *MockOIDC) FastForward(d time.Duration) {
 
 func (m *MockOIDC) Now() time.Time {
 	return NowFunc().Add(m.fastForward)
-}
-
-func availablePort() (string, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", err
-	}
-	defer listener.Close()
-
-	addr := listener.Addr().String()
-	_, port, err := net.SplitHostPort(addr)
-	return port, err
 }
