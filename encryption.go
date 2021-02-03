@@ -19,6 +19,17 @@ type Keypair struct {
 	Kid        string
 }
 
+func NewKeypair(key *rsa.PrivateKey) (*Keypair, error) {
+	if key == nil {
+		return RandomKeypair(1024)
+	}
+
+	return &Keypair{
+		PrivateKey: key,
+		PublicKey:  &key.PublicKey,
+	}, nil
+}
+
 func RandomKeypair(size int) (*Keypair, error) {
 	key, err := rsa.GenerateKey(rand.Reader, size)
 	if err != nil {
@@ -73,7 +84,7 @@ func (k *Keypair) JWKS() (string, error) {
 }
 
 func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("RS256"), claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 
 	kid, err := k.KeyID()
 	if err != nil {
