@@ -24,9 +24,9 @@ func TestNewSession(t *testing.T) {
 	session, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
 
 	assert.NoError(t, err)
-	assert.Equalf(t, len(session.Scopes), 2, "Incorrect scope count: %v", len(session.Scopes))
-	assert.Equalf(t, len(ss.Store), 1, "Wrong number of sessions in the session store: %d", len(ss.Store))
-	assert.Equalf(t, ss.Store[session.SessionID], session, "Session not stored in session store")
+	assert.Equal(t, session.Scopes, []string{"openid", "profile"})
+	assert.Equal(t, len(ss.Store), 1)
+	assert.Equal(t, ss.Store[session.SessionID], session)
 }
 
 func TestAccessToken(t *testing.T) {
@@ -166,17 +166,12 @@ func TestGetSessionFromToken(t *testing.T) {
 	token, err := keypair.VerifyJWT(tokenString)
 	assert.NoError(t, err)
 
-	session, err := ss.GetSessionFromToken(token, now)
+	session, err := ss.GetSessionByToken(token, now)
 	assert.NoError(t, err)
 	assert.Equal(t, session, s2)
 
-	tooLate := now.Add(time.Minute * time.Duration(11))
-	session, err = ss.GetSessionFromToken(token, tooLate)
-	assert.Error(t, err)
-	assert.Nil(t, session)
-
 	delete(ss.Store, s2.SessionID)
-	session, err = ss.GetSessionFromToken(token, now)
+	session, err = ss.GetSessionByToken(token, now)
 	assert.Error(t, err)
 	assert.Nil(t, session)
 

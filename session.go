@@ -8,7 +8,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-// Session is a struct that maintains session state across requests
+// Session stores a User and their OIDC options across requests
 type Session struct {
 	SessionID  string
 	Scopes     []string
@@ -17,21 +17,21 @@ type Session struct {
 	User       *User
 }
 
-// SessionStore is a map of #Session structs
+// SessionStore manages our Session objects
 type SessionStore struct {
 	Store map[string]*Session
 }
 
 // NewSessionStore initializes the SessionStore for this server
 func NewSessionStore() *SessionStore {
-	var ss SessionStore
-	ss.Store = make(map[string]*Session)
-	return &ss
+	return &SessionStore{
+		Store: make(map[string]*Session),
+	}
 }
 
-// NewSession returns a pointer to a new Session struct
-func (ss *SessionStore) NewSession(scope string, oAuthState string, oidcNonce string, user *User) (*Session, error) {
-	sessionID, err := nonce(24)
+// NewSession creates a new Session for a User
+func (ss *SessionStore) NewSession(scope string, state string, nonce string, user *User) (*Session, error) {
+	sessionID, err := randomNonce(24)
 	if err != nil {
 		return nil, err
 	}
@@ -39,58 +39,54 @@ func (ss *SessionStore) NewSession(scope string, oAuthState string, oidcNonce st
 	session := &Session{
 		SessionID:  sessionID,
 		Scopes:     strings.Split(scope, " "),
-		OAuthState: oAuthState,
-		OIDCNonce:  oidcNonce,
+		OAuthState: state,
+		OIDCNonce:  nonce,
 		User:       user,
 	}
-
 	ss.Store[sessionID] = session
 
 	return session, nil
 }
 
-// GetSessionByID returns the session found for the passed id, nil if no session found
+// GetSessionByID looks up the Session
 func (ss *SessionStore) GetSessionByID(id string) (*Session, error) {
 	session, ok := ss.Store[id]
-	if ok {
-		return session, nil
-	} else {
-		return nil, errors.New("Session not found")
+	if !ok {
+		return nil, errors.New("session not found")
 	}
+	return session, nil
 }
 
-// GetSessionFromToken decodes a passed token and finds and returns the session for the encoded session id
-func (ss *SessionStore) GetSessionFromToken(token *jwt.Token, now time.Time) (*Session, error) {
-
+// GetSessionByToken decodes a token and looks up a Session based on the
+// session ID claim.
+func (ss *SessionStore) GetSessionByToken(token *jwt.Token, now time.Time) (*Session, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return nil, errors.New("Invalid JWT")
-	}
-
-	exp := int64(claims["exp"].(float64))
-	if exp < now.Unix() {
-		return nil, errors.New("Expired JWT")
+		return nil, errors.New("invalid token")
 	}
 
 	sessionID := claims["jti"].(string)
 	return ss.GetSessionByID(sessionID)
-
 }
 
-// AccessToken returns the JWT token with the appropriate claims for an access token
+// AccessToken returns the JWT token with the appropriate claims for
+// an access token
 func (s *Session) AccessToken(config *Config, kp *Keypair, now time.Time) (string, error) {
-
 	claims := s.standardClaims(config, config.AccessTTL, now)
-
 	return kp.SignJWT(claims)
 }
 
-// standardClaims returns a populated jwt.StandardCLaims struct
-func (s *Session) standardClaims(config *Config, ttl int, now time.Time) *jwt.StandardClaims {
+// RefreshToken returns the JWT token with the appropriate claims for
+// a refresh token
+func (s *Session) RefreshToken(config *Config, kp *Keypair, now time.Time) (string, error) {
+	claims := s.standardClaims(config, config.RefreshTTL, now)
+	return kp.SignJWT(claims)
+}
 
+func (s *Session) standardClaims(config *Config, ttl time.Duration, now time.Time) *jwt.StandardClaims {
 	return &jwt.StandardClaims{
 		Audience:  config.ClientID,
-		ExpiresAt: now.Unix() + int64(ttl),
+		ExpiresAt: now.Add(ttl).Unix(),
 		Id:        s.SessionID,
 		IssuedAt:  now.Unix(),
 		Issuer:    config.Issuer,
@@ -99,46 +95,25 @@ func (s *Session) standardClaims(config *Config, ttl int, now time.Time) *jwt.St
 	}
 }
 
-// RefreshToken returns the JWT token with the appropriate claims for an access token
-func (s *Session) RefreshToken(config *Config, kp *Keypair, now time.Time) (string, error) {
-	claims := s.standardClaims(config, config.RefreshTTL, now)
-
-	return kp.SignJWT(claims)
-}
-
-// IDTokenClaims are the claims to be provided to jwt.Sign to create the ID token
-type IDTokenClaims struct {
+type idTokenClaims struct {
 	PreferredUsername string   `json:"preferred_username,omitempty"`
 	Email             string   `json:"email,omitempty"`
 	Phone             string   `json:"phone_number,omitempty"`
 	Address           string   `json:"address,omitempty"`
 	Groups            []string `json:"groups,omitempty"`
 	EmailVerified     bool     `json:"email_verified,omitempty"`
-	Nonce             string   `json:"nonce,omitempty"`
+	Nonce             string   `json:"randomNonce,omitempty"`
 	jwt.StandardClaims
 }
 
-// IDToken returns the JWT token with the appropriate claims for an access token
+// IDToken returns the JWT token with the appropriate claims for a user
+// based on the scopes set.
 func (s *Session) IDToken(config *Config, kp *Keypair, now time.Time) (string, error) {
-
-	idClaims := IDTokenClaims{
+	idClaims := &idTokenClaims{
+		Nonce:          s.OIDCNonce,
 		StandardClaims: *s.standardClaims(config, config.AccessTTL, now),
 	}
-
-	idClaims = s.User.IDClaimsForScopes(s.Scopes, idClaims)
-
-	if contains(s.Scopes, "nonce") {
-		idClaims.Nonce = s.OIDCNonce
-	}
+	s.User.populateClaims(s.Scopes, idClaims)
 
 	return kp.SignJWT(idClaims)
-}
-
-func contains(s []string, value string) bool {
-	for _, v := range s {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }
