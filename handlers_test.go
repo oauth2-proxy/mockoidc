@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/assert"
@@ -44,7 +45,7 @@ func TestAuthorizeHandler(t *testing.T) {
 	}
 }
 
-func TestTokenAuthorization(t *testing.T) {
+func TestAccessTokenRequest(t *testing.T) {
 	keypair, _ := RandomKeypair(2048)
 	m, _ := NewServer(keypair.PrivateKey)
 	session, _ := m.SessionStore.NewSession("sessionScope", "sessionStrate", "sessionNonce", DefaultUser())
@@ -62,7 +63,7 @@ func TestTokenAuthorization(t *testing.T) {
 		newData, _ := url.ParseQuery(data.Encode())
 		newData.Del(key)
 		rr := testResponse(t, tokenEndpoint, m.Token, http.MethodPost, newData)
-		assert.Equalf(t, rr.Code, 400, "Should be 400 but was %d, even though %s is missing", rr.Code, key)
+		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was %d, even though %s is missing", rr.Code, key)
 		body, _ := ioutil.ReadAll(rr.Body)
 		assert.Containsf(t, string(body), invalidRequest, "Should be %s, but was not", invalidRequest)
 	}
@@ -72,7 +73,7 @@ func TestTokenAuthorization(t *testing.T) {
 		newData, _ := url.ParseQuery(data.Encode())
 		newData.Set(key, "This is wrong")
 		rr := testResponse(t, tokenEndpoint, m.Token, http.MethodPost, newData)
-		assert.Equalf(t, rr.Code, 401, "Should be error but was not, even though %s is an invalid value", key)
+		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was not, even though %s is an invalid value", key)
 	}
 
 	// good request; check responses
@@ -93,6 +94,67 @@ func TestTokenAuthorization(t *testing.T) {
 		assert.NoError(t, err)
 		assert.IsType(t, tknType, token)
 	}
+	// TODO: validate returned tokens??
+
+}
+func TestRefreshTokenRequest(t *testing.T) {
+	keypair, _ := RandomKeypair(2048)
+	m, _ := NewServer(keypair.PrivateKey)
+	session, _ := m.SessionStore.NewSession("sessionScope", "sessionStrate", "sessionNonce", DefaultUser())
+	refreshToken, _ := session.RefreshToken(m.Config(), m.Keypair, m.Now())
+
+	assert.HTTPError(t, m.Token, http.MethodPost, tokenEndpoint, nil)
+
+	data := url.Values{}
+	data.Set("client_id", m.ClientID)
+	data.Set("client_secret", m.ClientSecret)
+	data.Set("refresh_token", refreshToken)
+	data.Set("grant_type", "refresh_token")
+
+	// all values must be provided
+	for key, _ := range data {
+		newData, _ := url.ParseQuery(data.Encode())
+		newData.Del(key)
+		rr := testResponse(t, tokenEndpoint, m.Token, http.MethodPost, newData)
+		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was %d, even though %s is missing", rr.Code, key)
+		body, _ := ioutil.ReadAll(rr.Body)
+		assert.Containsf(t, string(body), invalidRequest, "Should be %s, but was not", invalidRequest)
+	}
+
+	// wrong values won't work
+	for key, _ := range data {
+		newData, _ := url.ParseQuery(data.Encode())
+		newData.Set(key, "This is wrong")
+		rr := testResponse(t, tokenEndpoint, m.Token, http.MethodPost, newData)
+		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was not, even though %s is an invalid value", key)
+	}
+
+	// good request; check responses
+	rr := testResponse(t, tokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, 200, rr.Code)
+	body, _ := ioutil.ReadAll(rr.Body)
+	assert.Contains(t, string(body), "refresh_token")
+
+	refreshToken, _ = session.RefreshToken(m.Config(), m.Keypair, m.Now().Add(time.Hour*time.Duration(-24)))
+	data.Set("refresh_token", refreshToken)
+	rr = testResponse(t, tokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, 401, rr.Code)
+	body, _ = ioutil.ReadAll(rr.Body)
+	assert.Contains(t, string(body), invalidRequest)
+	// var target *tokenResponse
+	// assert.NoError(t, getJSON(rr, &target))
+	// assert.NotEmpty(t, target.AccessToken)
+	// assert.NotEmpty(t, target.IDToken)
+	// assert.NotEmpty(t, target.RefreshToken)
+	// assert.NotEmpty(t, target.TokenType)
+	// assert.NotEmpty(t, target.ExpiresIn)
+
+	// var tknType *jwt.Token
+	// for _, tStr := range []string{target.AccessToken, target.RefreshToken, target.IDToken} {
+	// 	token, err := m.Keypair.VerifyJWT(tStr)
+	// 	assert.NoError(t, err)
+	// 	assert.IsType(t, tknType, token)
+	// }
 
 }
 
