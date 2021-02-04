@@ -1,7 +1,5 @@
 package mockoidc
 
-import "sync"
-
 // User represents a mock user that the server will grant Oauth tokens for.
 // Calls to the `authorization_endpoint` will pop any mock Users added to the
 // `UserQueue`. Otherwise `DefaultUser()` is returned.
@@ -13,13 +11,6 @@ type User struct {
 	Phone             string   `json:"phone,omitempty"`
 	Address           string   `json:"address,omitempty"`
 	Groups            []string `json:"groups,omitempty"`
-}
-
-// UserQueue manages the queue of Users returned for each
-// call to the authorize endpoint
-type UserQueue struct {
-	sync.Mutex
-	Queue []*User
 }
 
 // DefaultUser returns a default User that is set in `authorization_endpoint`
@@ -34,28 +25,6 @@ func DefaultUser() *User {
 		Groups:            []string{"engineering", "design"},
 		EmailVerified:     true,
 	}
-}
-
-// Push adds a User to the Queue to be set in subsequent calls to the
-// `authorization_endpoint`
-func (q *UserQueue) Push(user *User) {
-	q.Lock()
-	defer q.Unlock()
-	q.Queue = append(q.Queue, user)
-}
-
-// Pop a User from the Queue. If empty, return `DefaultUser()`
-func (q *UserQueue) Pop() *User {
-	q.Lock()
-	defer q.Unlock()
-
-	if len(q.Queue) == 0 {
-		return DefaultUser()
-	}
-
-	var user *User
-	user, q.Queue = q.Queue[0], q.Queue[1:]
-	return user
 }
 
 func (u *User) populateClaims(scopes []string, claims *idTokenClaims) {

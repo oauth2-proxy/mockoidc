@@ -153,15 +153,24 @@ func (m *MockOIDC) Issuer() string {
 
 // QueueUser allows adding mock User objects to the authentication queue.
 // Calls to the `authorization_endpoint` will pop these mock User objects
-// of the queue and create a session with them.
+// off the queue and create a session with them.
 func (m *MockOIDC) QueueUser(user *User) {
 	m.UserQueue.Push(user)
 }
 
+// QueueCode allows adding mock code strings to the authentication queue.
+// Calls to the `authorization_endpoint` will pop these code strings
+// off the queue and create a session with them and return them as the
+// code parameter in the response.
+func (m *MockOIDC) QueueCode(code string) {
+	m.SessionStore.CodeQueue.Push(code)
+}
+
 // FastForward moves the MockOIDC's internal view of time forward.
 // Use this to test token expirations in your tests.
-func (m *MockOIDC) FastForward(d time.Duration) {
+func (m *MockOIDC) FastForward(d time.Duration) time.Duration {
 	m.fastForward = m.fastForward + d
+	return m.fastForward
 }
 
 // Now is what MockOIDC thinks time.Now is
