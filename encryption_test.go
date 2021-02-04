@@ -2,9 +2,8 @@ package mockoidc_test
 
 import (
 	"crypto/x509"
-	"encoding/pem"
+	"encoding/base64"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -36,13 +35,7 @@ func TestDefaultKeypair(t *testing.T) {
 	assert.NoError(t, err)
 
 	keyBytes := x509.MarshalPKCS1PrivateKey(keypair.PrivateKey)
-	pem := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: keyBytes,
-		},
-	)
-	assert.Equal(t, mockoidc.DefaultPrivateKey, strings.TrimRight(string(pem), "\n"))
+	assert.Equal(t, mockoidc.DefaultKey, base64.RawURLEncoding.EncodeToString(keyBytes))
 
 	kid, err := keypair.KeyID()
 	assert.NoError(t, err)
