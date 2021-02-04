@@ -19,19 +19,21 @@ type Session struct {
 
 // SessionStore manages our Session objects
 type SessionStore struct {
-	Store map[string]*Session
+	Store     map[string]*Session
+	CodeQueue *CodeQueue
 }
 
 // NewSessionStore initializes the SessionStore for this server
 func NewSessionStore() *SessionStore {
 	return &SessionStore{
-		Store: make(map[string]*Session),
+		Store:     make(map[string]*Session),
+		CodeQueue: &CodeQueue{},
 	}
 }
 
 // NewSession creates a new Session for a User
 func (ss *SessionStore) NewSession(scope string, state string, nonce string, user *User) (*Session, error) {
-	sessionID, err := randomNonce(24)
+	sessionID, err := ss.CodeQueue.Pop()
 	if err != nil {
 		return nil, err
 	}
