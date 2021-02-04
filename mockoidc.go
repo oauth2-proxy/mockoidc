@@ -100,11 +100,11 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	}
 
 	handler := http.NewServeMux()
-	handler.HandleFunc(authorizeEndpoint, m.Authorize)
-	handler.HandleFunc(tokenEndpoint, m.Token)
-	handler.HandleFunc(userinfoEndpoint, m.Userinfo)
-	handler.HandleFunc(jwksEndpoint, m.JWKS)
-	handler.HandleFunc(discoveryEndpoint, m.JWKS)
+	handler.HandleFunc(AuthorizeEndpoint, m.Authorize)
+	handler.HandleFunc(TokenEndpoint, m.Token)
+	handler.HandleFunc(UserinfoEndpoint, m.Userinfo)
+	handler.HandleFunc(JWKSEndpoint, m.JWKS)
+	handler.HandleFunc(DiscoveryEndpoint, m.JWKS)
 
 	m.Server = &http.Server{
 		Addr:      ln.Addr().String(),
@@ -148,7 +148,7 @@ func (m *MockOIDC) Issuer() string {
 	if m.Server.TLSConfig != nil {
 		proto = "https"
 	}
-	return fmt.Sprintf("%s://%s/", proto, m.Server.Addr)
+	return fmt.Sprintf("%s://%s%s", proto, m.Server.Addr, issuerBase)
 }
 
 // QueueUser allows adding mock User objects to the authentication queue.
