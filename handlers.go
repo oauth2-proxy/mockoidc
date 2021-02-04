@@ -21,6 +21,13 @@ const (
 	userinfoEndpoint  = "/userinfo"
 	jwksEndpoint      = "/.well-known/jwks.json"
 	discoveryEndpoint = "/.well-known/openid-configuration"
+
+	invalidRequest       = "invalid_request"
+	invalidClient        = "invalid_client"
+	invalidGrant         = "invalid_grant"
+	unsupportedGrantType = "unsupported_grant_type"
+	//invalidScope       = "invalid_scope"
+	//unauthorizedClient = "unauthorized_client"
 )
 
 // Authorize implements the `authorization_endpoint` in the OIDC flow.
@@ -33,10 +40,9 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	clientID := req.Form.Get("client_id")
-	if m.ClientID != clientID {
-		errorResponse(rw, fmt.Sprintf("Invalid client id: %s", clientID),
-			http.StatusUnauthorized)
+	validClient := assertParam("client_id", m.ClientID,
+		invalidClient, "Invalid client id", rw, req)
+	if !validClient {
 		return
 	}
 
@@ -47,13 +53,13 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 		m.UserQueue.Pop(),
 	)
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
 
 	redirectURI, err := url.Parse(req.Form.Get("redirect_uri"))
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
 	params, _ := url.ParseQuery(redirectURI.RawQuery)
@@ -78,54 +84,58 @@ type tokenResponse struct {
 // OAuth tokens to the application server for the User authenticated by the
 // during the `authorization_endpoint` request (persisted across requests via
 // the `code`).
+// Reference: https://www.oauth.com/oauth2-servers/access-tokens/access-token-response/
 // TODO (@NickMeves): Handle Token Refresh
 func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
-	valid := validateParams([]string{"client_id", "client_secret", "code"}, rw, req)
+
+	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
+	valid := validateParams(
+		[]string{"client_id", "client_secret", "code", "grant_type"}, rw, req)
 	if !valid {
 		return
 	}
 
-	clientID := req.Form.Get("client_id")
-	if subtle.ConstantTimeCompare([]byte(m.ClientID), []byte(clientID)) == 0 {
-		errorResponse(rw, fmt.Sprintf("Invalid client id: %s", clientID),
-			http.StatusUnauthorized)
-		return
-	}
-	clientSecret := req.Form.Get("client_secret")
-	if subtle.ConstantTimeCompare([]byte(m.ClientSecret), []byte(clientSecret)) == 0 {
-		errorResponse(rw, fmt.Sprintf("Invalid client secret: %s", clientSecret),
-			http.StatusUnauthorized)
-		return
+	// parameter, expected_value, error_type, error_description
+	for _, param := range [][]string{
+		{"client_id", m.ClientID, invalidClient, "Invalid client id"},
+		{"client_secret", m.ClientSecret, invalidClient, "Invalid client secret"},
+		{"grant_type", "authorization_code", unsupportedGrantType, "Invalid grant type"},
+	} {
+		if !assertParam(param[0], param[1], param[2], param[3], rw, req) {
+			return
+		}
 	}
 
 	code := req.Form.Get("code")
 	session, err := m.SessionStore.GetSessionByID(code)
 	if err != nil {
-		errorResponse(rw, fmt.Sprintf("Invalid code: %s", code),
+		errorResponse(rw, invalidGrant, fmt.Sprintf("Invalid code: %s", code),
 			http.StatusUnauthorized)
 		return
 	}
 
 	tr := &tokenResponse{
-		TokenType: "Bearer",
-		ExpiresIn: m.RefreshTTL,
+		TokenType: "bearer",
+		ExpiresIn: m.AccessTTL,
 	}
-	m.setTokens(tr, session)
+	err = m.setTokens(tr, session)
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
 
 	resp, err := json.Marshal(tr)
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
+
+	noCache(rw)
 	jsonResponse(rw, resp)
 }
 
@@ -157,13 +167,13 @@ func (m *MockOIDC) Userinfo(rw http.ResponseWriter, req *http.Request) {
 
 	session, err := m.SessionStore.GetSessionByToken(token)
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
 
 	resp, err := json.Marshal(session.User.scopedClone(session.Scopes))
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
 	jsonResponse(rw, resp)
@@ -179,7 +189,7 @@ func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
 func (m *MockOIDC) JWKS(rw http.ResponseWriter, _ *http.Request) {
 	jwks, err := m.Keypair.JWKS()
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return
 	}
 
@@ -190,28 +200,30 @@ func (m *MockOIDC) authorizeToken(rw http.ResponseWriter, req *http.Request) *jw
 	authz := req.Header.Get("Authorization")
 	parts := strings.Split(authz, " ")
 	if len(parts) < 2 || parts[0] != "Bearer" {
-		errorResponse(rw, "Invalid authorization header", http.StatusUnauthorized)
+		errorResponse(rw, invalidRequest, "Invalid authorization header",
+			http.StatusUnauthorized)
 		return nil
 	}
 	token, err := m.Keypair.VerifyJWT(parts[1])
 	if err != nil {
-		errorResponse(rw, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+		errorResponse(rw, invalidRequest, fmt.Sprintf("Invalid token: %v", err),
+			http.StatusUnauthorized)
 		return nil
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		errorResponse(rw, "Unable to extract token claims",
-			http.StatusInternalServerError)
+		internalServerError(rw, "Unable to extract token claims")
 		return nil
 	}
 	exp, err := strconv.Atoi(claims["exp"].(string))
 	if err != nil {
-		errorResponse(rw, err.Error(), http.StatusInternalServerError)
+		internalServerError(rw, err.Error())
 		return nil
 	}
 	if time.Unix(int64(exp), 0).After(m.Now()) {
-		errorResponse(rw, "The token is expired", http.StatusUnauthorized)
+		errorResponse(rw, invalidRequest, "The token is expired",
+			http.StatusUnauthorized)
 		return nil
 	}
 	return token
@@ -225,6 +237,7 @@ func validateParams(required []string, rw http.ResponseWriter, req *http.Request
 
 		errorResponse(
 			rw,
+			invalidRequest,
 			fmt.Sprintf("The request is missing the required parameter: %s", param),
 			http.StatusBadRequest,
 		)
@@ -233,22 +246,51 @@ func validateParams(required []string, rw http.ResponseWriter, req *http.Request
 	return true
 }
 
-func errorResponse(rw http.ResponseWriter, message string, statusCode int) {
+func assertParam(param, value, errorType, errorMsg string, rw http.ResponseWriter, req *http.Request) bool {
+	formValue := req.Form.Get(param)
+	if subtle.ConstantTimeCompare([]byte(value), []byte(formValue)) == 0 {
+		errorResponse(rw, errorType, fmt.Sprintf("%s: %s", errorMsg, formValue),
+			http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func errorResponse(rw http.ResponseWriter, error, description string, statusCode int) {
 	errJSON := map[string]string{
-		"error": message,
+		"error":             error,
+		"error_description": description,
 	}
 	resp, err := json.Marshal(errJSON)
 	if err != nil {
-		http.Error(rw, message, http.StatusInternalServerError)
+		http.Error(rw, error, http.StatusInternalServerError)
 	}
 
+	noCache(rw)
 	rw.Header().Set("Content-Type", applicationJSON)
 	rw.WriteHeader(statusCode)
-	rw.Write(resp)
+
+	_, err = rw.Write(resp)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func internalServerError(rw http.ResponseWriter, errorMsg string) {
+	errorResponse(rw, "internal_server_error", errorMsg, http.StatusInternalServerError)
 }
 
 func jsonResponse(rw http.ResponseWriter, data []byte) {
 	rw.Header().Set("Content-Type", applicationJSON)
 	rw.WriteHeader(http.StatusOK)
-	rw.Write(data)
+
+	_, err := rw.Write(data)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func noCache(rw http.ResponseWriter) {
+	rw.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
+	rw.Header().Set("Pragma", "no-cache")
 }
