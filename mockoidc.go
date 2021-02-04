@@ -8,33 +8,34 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 )
 
-const (
-	authorizeEndpoint = "/authorize"
-	tokenEndpoint     = "/token"
-)
-
+// NowFunc is an overrideable version of `time.Now`. Tests that need to
+// manipulate time can use their own `func() Time` function.
 var NowFunc = time.Now
 
+// MockOIDC is a minimal OIDC server for use in OIDC authentication
+// integration testing.
 type MockOIDC struct {
-	sync.Mutex
-
 	ClientID     string
 	ClientSecret string
 
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
 
-	Keypair *Keypair
+	// Normally, these would be private. Expose them publicly for
+	// power users.
+	Server       *http.Server
+	Keypair      *Keypair
+	SessionStore *SessionStore
+	UserQueue    *UserQueue
 
-	server      *http.Server
-	userQueue   []*User
 	fastForward time.Duration
 }
 
+// Config gives the various settings MockOIDC starts with that a test
+// application server would need to be configured with.
 type Config struct {
 	ClientID     string
 	ClientSecret string
@@ -44,12 +45,15 @@ type Config struct {
 	RefreshTTL time.Duration
 }
 
+// NewServer configures a new MockOIDC that isn't started. An existing
+// rsa.PrivateKey can be passed for token signing operations in case
+// randomly generating them on each test run is too compute intensive.
 func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
-	clientID, err := nonce(24)
+	clientID, err := randomNonce(24)
 	if err != nil {
 		return nil, err
 	}
-	clientSecret, err := nonce(24)
+	clientSecret, err := randomNonce(24)
 	if err != nil {
 		return nil, err
 	}
@@ -64,13 +68,18 @@ func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 		AccessTTL:    time.Duration(10) * time.Minute,
 		RefreshTTL:   time.Duration(60) * time.Minute,
 		Keypair:      keypair,
+		SessionStore: NewSessionStore(),
+		UserQueue:    &UserQueue{},
 	}, nil
 }
 
+// Run creates a default MockOIDC server and starts it
 func Run() (*MockOIDC, error) {
 	return RunTLS(nil)
 }
 
+// RunTLS creates a default MockOIDC server and starts it. It takes a
+// tester configured tls.Config for TLS support.
 func RunTLS(cfg *tls.Config) (*MockOIDC, error) {
 	m, err := NewServer(nil)
 	if err != nil {
@@ -83,22 +92,28 @@ func RunTLS(cfg *tls.Config) (*MockOIDC, error) {
 	return m, m.Start(ln, cfg)
 }
 
+// Start starts the MockOIDC server in its own Goroutine on the provided
+// net.Listener. In generic `Run`, this defaults to `127.0.0.1:0`
 func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
-	if m.server != nil {
+	if m.Server != nil {
 		return errors.New("server already started")
 	}
 
 	handler := http.NewServeMux()
 	handler.HandleFunc(authorizeEndpoint, m.Authorize)
+	handler.HandleFunc(tokenEndpoint, m.Token)
+	handler.HandleFunc(userinfoEndpoint, m.Userinfo)
+	handler.HandleFunc(jwksEndpoint, m.JWKS)
+	handler.HandleFunc(discoveryEndpoint, m.JWKS)
 
-	m.server = &http.Server{
+	m.Server = &http.Server{
 		Addr:      ln.Addr().String(),
 		Handler:   handler,
 		TLSConfig: cfg,
 	}
 
 	go func() {
-		err := m.server.Serve(ln)
+		err := m.Server.Serve(ln)
 		if err != nil && err != http.ErrServerClosed {
 			panic(err)
 		}
@@ -107,14 +122,13 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	return nil
 }
 
+// Shutdown stops the MockOIDC server. Use this to cleanup test runs.
 func (m *MockOIDC) Shutdown() error {
-	return m.server.Shutdown(context.Background())
+	return m.Server.Shutdown(context.Background())
 }
 
-func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
-	http.Redirect(rw, req, tokenEndpoint, http.StatusFound)
-}
-
+// Config returns the Config with options a connection application or unit
+// tests need to be aware of.
 func (m *MockOIDC) Config() *Config {
 	return &Config{
 		ClientID:     m.ClientID,
@@ -125,28 +139,32 @@ func (m *MockOIDC) Config() *Config {
 	}
 }
 
+// Issuer returns the OIDC Issuer URL of this MockOIDC server
 func (m *MockOIDC) Issuer() string {
-	if m.server == nil {
+	if m.Server == nil {
 		return ""
 	}
 	proto := "http"
-	if m.server.TLSConfig != nil {
+	if m.Server.TLSConfig != nil {
 		proto = "https"
 	}
-	return fmt.Sprintf("%s://%s/", proto, m.server.Addr)
+	return fmt.Sprintf("%s://%s/", proto, m.Server.Addr)
 }
 
+// QueueUser allows adding mock User objects to the authentication queue.
+// Calls to the `authorization_endpoint` will pop these mock User objects
+// of the queue and create a session with them.
 func (m *MockOIDC) QueueUser(user *User) {
-	m.Lock()
-	defer m.Unlock()
-
-	m.userQueue = append(m.userQueue, user)
+	m.UserQueue.Push(user)
 }
 
+// FastForward moves the MockOIDC's internal view of time forward.
+// Use this to test token expirations in your tests.
 func (m *MockOIDC) FastForward(d time.Duration) {
 	m.fastForward = m.fastForward + d
 }
 
+// Now is what MockOIDC thinks time.Now is
 func (m *MockOIDC) Now() time.Time {
 	return NowFunc().Add(m.fastForward)
 }

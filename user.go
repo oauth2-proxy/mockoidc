@@ -7,12 +7,12 @@ import "sync"
 // `UserQueue`. Otherwise `DefaultUser()` is returned.
 type User struct {
 	ID                string
-	Email             string
+	Email             string `json:"email,omitempty"`
 	EmailVerified     bool
-	PreferredUsername string
-	Phone             string
-	Address           string
-	Groups            []string
+	PreferredUsername string   `json:"preferred_username,omitempty"`
+	Phone             string   `json:"phone,omitempty"`
+	Address           string   `json:"address,omitempty"`
+	Groups            []string `json:"groups,omitempty"`
 }
 
 // UserQueue manages the queue of Users returned for each

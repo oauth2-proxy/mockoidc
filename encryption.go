@@ -63,10 +63,10 @@ func (k *Keypair) KeyID() (string, error) {
 	return k.Kid, nil
 }
 
-func (k *Keypair) JWKS() (string, error) {
+func (k *Keypair) JWKS() ([]byte, error) {
 	kid, err := k.KeyID()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	jwk := jose.JSONWebKey{
@@ -79,8 +79,7 @@ func (k *Keypair) JWKS() (string, error) {
 		Keys: []jose.JSONWebKey{jwk},
 	}
 
-	jsonJWKS, err := json.Marshal(jwks)
-	return string(jsonJWKS), err
+	return json.Marshal(jwks)
 }
 
 func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
@@ -108,7 +107,7 @@ func (k *Keypair) VerifyJWT(token string) (*jwt.Token, error) {
 	})
 }
 
-func nonce(length int) (string, error) {
+func randomNonce(length int) (string, error) {
 	b := make([]byte, length)
 	_, err := rand.Read(b)
 	if err != nil {
