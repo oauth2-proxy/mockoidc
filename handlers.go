@@ -177,7 +177,7 @@ func (m *MockOIDC) Userinfo(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(session.User.scopedClone(session.Scopes))
+	resp, err := session.User.userinfo(session.Scopes)
 	if err != nil {
 		internalServerError(rw, err.Error())
 		return
