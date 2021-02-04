@@ -13,13 +13,13 @@ import (
 )
 
 const (
-	applicationJSON = "application/json"
+	AuthorizeEndpoint = "/oidc/authorize"
+	TokenEndpoint     = "/oidc/token"
+	UserinfoEndpoint  = "/oidc/userinfo"
+	JWKSEndpoint      = "/oidc/.well-known/jwks.json"
+	DiscoveryEndpoint = "/oidc/.well-known/openid-configuration"
 
-	authorizeEndpoint = "/authorize"
-	tokenEndpoint     = "/token"
-	userinfoEndpoint  = "/userinfo"
-	jwksEndpoint      = "/.well-known/jwks.json"
-	discoveryEndpoint = "/.well-known/openid-configuration"
+	issuerBase = "/oidc"
 
 	invalidRequest       = "invalid_request"
 	invalidClient        = "invalid_client"
@@ -27,6 +27,45 @@ const (
 	unsupportedGrantType = "unsupported_grant_type"
 	//invalidScope       = "invalid_scope"
 	//unauthorizedClient = "unauthorized_client"
+
+	applicationJSON = "application/json"
+)
+
+var (
+	GrantTypesSupported = []string{
+		"authorization_code",
+		"refresh_token",
+	}
+	ResponseTypesSupported = []string{
+		"code",
+	}
+	SubjectTypesSupported = []string{
+		"public",
+	}
+	IDTokenSigningAlgValuesSupported = []string{
+		"RS256",
+	}
+	ScopesSupported = []string{
+		"openid",
+		"email",
+		"groups",
+		"profile",
+	}
+	TokenEndpointAuthMethodsSupported = []string{
+		"client_secret_basic",
+		"client_secret_post",
+	}
+	ClaimsSupported = []string{
+		"sub",
+		"email",
+		"email_verified",
+		"preferred_username",
+		"phone_number",
+		"address",
+		"groups",
+		"iss",
+		"aud",
+	}
 )
 
 // Authorize implements the `authorization_endpoint` in the OIDC flow.
@@ -273,9 +312,47 @@ func (m *MockOIDC) Userinfo(rw http.ResponseWriter, req *http.Request) {
 	jsonResponse(rw, resp)
 }
 
-// TODO (@NickMeves): Implement!
+type discoveryResponse struct {
+	Issuer                string `json:"issuer"`
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	JWKSUri               string `json:"jwks_uri"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
+
+	GrantTypesSupported               []string `json:"grant_types_supported"`
+	ResponseTypesSupported            []string `json:"response_types_supported"`
+	SubjectTypesSupported             []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	ScopesSupported                   []string `json:"scopes_supported"`
+	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	ClaimsSupported                   []string `json:"claims_supported"`
+}
+
+// Discovery renders the OIDC discovery document hosted at
+// `/.well-known/openid-configuration`.
 func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
-	jsonResponse(rw, []byte(`{}`))
+	discovery := &discoveryResponse{
+		Issuer:                m.Issuer(),
+		AuthorizationEndpoint: m.Issuer() + AuthorizeEndpoint,
+		TokenEndpoint:         m.Issuer() + TokenEndpoint,
+		JWKSUri:               m.Issuer() + JWKSEndpoint,
+		UserinfoEndpoint:      m.Issuer() + UserinfoEndpoint,
+
+		GrantTypesSupported:               GrantTypesSupported,
+		ResponseTypesSupported:            ResponseTypesSupported,
+		SubjectTypesSupported:             SubjectTypesSupported,
+		IDTokenSigningAlgValuesSupported:  IDTokenSigningAlgValuesSupported,
+		ScopesSupported:                   ScopesSupported,
+		TokenEndpointAuthMethodsSupported: TokenEndpointAuthMethodsSupported,
+		ClaimsSupported:                   ClaimsSupported,
+	}
+
+	resp, err := json.Marshal(discovery)
+	if err != nil {
+		internalServerError(rw, err.Error())
+		return
+	}
+	jsonResponse(rw, resp)
 }
 
 // JWKS returns the public key in JWKS format to verify in tokens
@@ -383,6 +460,7 @@ func internalServerError(rw http.ResponseWriter, errorMsg string) {
 }
 
 func jsonResponse(rw http.ResponseWriter, data []byte) {
+	noCache(rw)
 	rw.Header().Set("Content-Type", applicationJSON)
 	rw.WriteHeader(http.StatusOK)
 
