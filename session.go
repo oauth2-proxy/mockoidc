@@ -59,7 +59,7 @@ func (ss *SessionStore) GetSessionByID(id string) (*Session, error) {
 
 // GetSessionByToken decodes a token and looks up a Session based on the
 // session ID claim.
-func (ss *SessionStore) GetSessionByToken(token *jwt.Token, now time.Time) (*Session, error) {
+func (ss *SessionStore) GetSessionByToken(token *jwt.Token) (*Session, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
 		return nil, errors.New("invalid token")
@@ -102,7 +102,7 @@ type idTokenClaims struct {
 	Address           string   `json:"address,omitempty"`
 	Groups            []string `json:"groups,omitempty"`
 	EmailVerified     bool     `json:"email_verified,omitempty"`
-	Nonce             string   `json:"randomNonce,omitempty"`
+	Nonce             string   `json:"nonce,omitempty"`
 	jwt.StandardClaims
 }
 

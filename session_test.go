@@ -32,7 +32,7 @@ func TestNewSession(t *testing.T) {
 func TestAccessToken(t *testing.T) {
 	session := defaultSession()
 	config := defaultConfig()
-	keypair, _ := RandomKeypair(2048)
+	keypair, _ := RandomKeypair(1024)
 	tokenString, err := session.AccessToken(&config, keypair, NowFunc())
 	assert.NoError(t, err)
 
@@ -53,7 +53,7 @@ func TestAccessToken(t *testing.T) {
 func TestRefreshToken(t *testing.T) {
 	session := defaultSession()
 	config := defaultConfig()
-	keypair, _ := RandomKeypair(2048)
+	keypair, _ := RandomKeypair(1024)
 	tokenString, err := session.RefreshToken(&config, keypair, NowFunc())
 	assert.NoError(t, err)
 
@@ -74,7 +74,7 @@ func TestRefreshToken(t *testing.T) {
 func TestIDToken(t *testing.T) {
 	session := defaultSession()
 	config := defaultConfig()
-	keypair, _ := RandomKeypair(2048)
+	keypair, _ := RandomKeypair(1024)
 	tokenString, err := session.IDToken(&config, keypair, NowFunc())
 	assert.NoError(t, err)
 
@@ -156,7 +156,7 @@ func TestGetSessionFromToken(t *testing.T) {
 	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, &user2)
 	assert.NoError(t, err)
 
-	keypair, _ := RandomKeypair(2048)
+	keypair, _ := RandomKeypair(1024)
 	config := defaultConfig()
 
 	now := time.Now()
@@ -166,12 +166,12 @@ func TestGetSessionFromToken(t *testing.T) {
 	token, err := keypair.VerifyJWT(tokenString)
 	assert.NoError(t, err)
 
-	session, err := ss.GetSessionByToken(token, now)
+	session, err := ss.GetSessionByToken(token)
 	assert.NoError(t, err)
 	assert.Equal(t, session, s2)
 
 	delete(ss.Store, s2.SessionID)
-	session, err = ss.GetSessionByToken(token, now)
+	session, err = ss.GetSessionByToken(token)
 	assert.Error(t, err)
 	assert.Nil(t, session)
 
