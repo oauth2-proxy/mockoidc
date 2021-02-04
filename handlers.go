@@ -40,15 +40,20 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	valid := validateParams(
+	valid := validatePresence(
 		[]string{"scope", "state", "client_id", "response_type", "redirect_uri"}, rw, req)
 	if !valid {
 		return
 	}
 
-	validClient := assertParam("client_id", m.ClientID,
+	validClient := assertEqual("client_id", m.ClientID,
 		invalidClient, "Invalid client id", rw, req)
 	if !validClient {
+		return
+	}
+	validType := assertEqual("response_type", "code",
+		unsupportedGrantType, "Invalid response type", rw, req)
+	if !validType {
 		return
 	}
 
@@ -99,22 +104,8 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
-	valid := validateParams(
-		[]string{"client_id", "client_secret", "code", "grant_type"}, rw, req)
-	if !valid {
+	if !m.validateTokenParams(rw, req) {
 		return
-	}
-
-	// parameter, expected_value, error_type, error_description
-	for _, param := range [][]string{
-		{"client_id", m.ClientID, invalidClient, "Invalid client id"},
-		{"client_secret", m.ClientSecret, invalidClient, "Invalid client secret"},
-		{"grant_type", "authorization_code", unsupportedGrantType, "Invalid grant type"},
-	} {
-		if !assertParam(param[0], param[1], param[2], param[3], rw, req) {
-			return
-		}
 	}
 
 	code := req.Form.Get("code")
@@ -143,6 +134,37 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 
 	noCache(rw)
 	jsonResponse(rw, resp)
+}
+
+func (m *MockOIDC) validateTokenParams(rw http.ResponseWriter, req *http.Request) bool {
+	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
+	valid := validatePresence([]string{
+		"client_id",
+		"client_secret",
+		"code",
+		"grant_type",
+	}, rw, req)
+	if !valid {
+		return false
+	}
+
+	equal := assertEqual("client_id", m.ClientID,
+		invalidClient, "Invalid client id", rw, req)
+	if !equal {
+		return false
+	}
+	equal = assertEqual("client_secret", m.ClientSecret,
+		invalidClient, "Invalid client secret", rw, req)
+	if !equal {
+		return false
+	}
+	equal = assertEqual("grant_type", "authorization_code",
+		unsupportedGrantType, "Invalid grant type", rw, req)
+	if !equal {
+		return false
+	}
+
+	return true
 }
 
 func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session) error {
@@ -235,8 +257,8 @@ func (m *MockOIDC) authorizeToken(rw http.ResponseWriter, req *http.Request) *jw
 	return token
 }
 
-func validateParams(required []string, rw http.ResponseWriter, req *http.Request) bool {
-	for _, param := range required {
+func validatePresence(params []string, rw http.ResponseWriter, req *http.Request) bool {
+	for _, param := range params {
 		if req.Form.Get(param) != "" {
 			continue
 		}
@@ -252,7 +274,7 @@ func validateParams(required []string, rw http.ResponseWriter, req *http.Request
 	return true
 }
 
-func assertParam(param, value, errorType, errorMsg string, rw http.ResponseWriter, req *http.Request) bool {
+func assertEqual(param, value, errorType, errorMsg string, rw http.ResponseWriter, req *http.Request) bool {
 	formValue := req.Form.Get(param)
 	if subtle.ConstantTimeCompare([]byte(value), []byte(formValue)) == 0 {
 		errorResponse(rw, errorType, fmt.Sprintf("%s: %s", errorMsg, formValue),
