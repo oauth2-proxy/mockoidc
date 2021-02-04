@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -40,7 +39,7 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	valid := validatePresence(
+	valid := assertPresence(
 		[]string{"scope", "state", "client_id", "response_type", "redirect_uri"}, rw, req)
 	if !valid {
 		return
@@ -104,15 +103,28 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !m.validateTokenParams(rw, req) {
+	ok := m.sharedParamsValidator(rw, req)
+	if !ok {
 		return
 	}
 
-	code := req.Form.Get("code")
-	session, err := m.SessionStore.GetSessionByID(code)
-	if err != nil {
-		errorResponse(rw, invalidGrant, fmt.Sprintf("Invalid code: %s", code),
-			http.StatusUnauthorized)
+	var session *Session
+	grantType := req.Form.Get("grant_type")
+	switch grantType {
+	case "authorization_code":
+		s, ok := m.accessRequestValidator(rw, req)
+		if !ok {
+			return
+		}
+		session = s
+	case "refresh_token":
+		s, ok := m.refreshRequestValidator(rw, req)
+		if !ok {
+			return
+		}
+		session = s
+	default:
+		errorResponse(rw, invalidRequest, "Invalid grant_type", http.StatusBadRequest)
 		return
 	}
 
@@ -126,6 +138,10 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if grantType == "refresh_token" {
+		tr.RefreshToken = req.Form.Get("refresh_token")
+	}
+
 	resp, err := json.Marshal(tr)
 	if err != nil {
 		internalServerError(rw, err.Error())
@@ -136,29 +152,79 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 	jsonResponse(rw, resp)
 }
 
-func (m *MockOIDC) validateTokenParams(rw http.ResponseWriter, req *http.Request) bool {
+func (m *MockOIDC) sharedParamsValidator(rw http.ResponseWriter, req *http.Request) bool {
+	ok := assertPresence([]string{"client_id", "client_secret", "grant_type"}, rw, req)
+	if !ok {
+		return false
+	}
+	equal := assertEqual("client_id", m.ClientID, invalidClient, "Invalid client id", rw, req)
+	if !equal {
+		return false
+	}
+	equal = assertEqual("client_secret", m.ClientSecret, invalidClient, "Invalid client secret", rw, req)
+	if !equal {
+		return false
+	}
+	return true
+}
+
+func (m *MockOIDC) accessRequestValidator(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
+	if !m.validateAccessParams(rw, req) {
+		return nil, false
+	}
+	code := req.Form.Get("code")
+	session, err := m.SessionStore.GetSessionByID(code)
+	if err != nil {
+		errorResponse(rw, invalidGrant, fmt.Sprintf("Invalid code: %s", code),
+			http.StatusUnauthorized)
+		return nil, false
+	}
+	return session, true
+}
+
+func (m *MockOIDC) refreshRequestValidator(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
+	if !m.validateRefreshParams(rw, req) {
+		return nil, false
+	}
+	refreshToken := req.Form.Get("refresh_token")
+	token, ok := m.authorizeTokenString(refreshToken, rw, req)
+	if !ok {
+		return nil, false
+	}
+	session, err := m.SessionStore.GetSessionByToken(token)
+	if err != nil {
+		errorResponse(rw, invalidGrant, "Invalid refresh token",
+			http.StatusUnauthorized)
+		return nil, false
+	}
+	return session, true
+
+}
+
+func (m *MockOIDC) validateAccessParams(rw http.ResponseWriter, req *http.Request) bool {
 	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
-	valid := validatePresence([]string{
-		"client_id",
-		"client_secret",
-		"code",
-		"grant_type",
-	}, rw, req)
+	valid := assertPresence([]string{"code"}, rw, req)
 	if !valid {
 		return false
 	}
 
-	equal := assertEqual("client_id", m.ClientID,
-		invalidClient, "Invalid client id", rw, req)
+	equal := assertEqual("grant_type", "authorization_code",
+		unsupportedGrantType, "Invalid grant type", rw, req)
 	if !equal {
 		return false
 	}
-	equal = assertEqual("client_secret", m.ClientSecret,
-		invalidClient, "Invalid client secret", rw, req)
-	if !equal {
+
+	return true
+}
+
+func (m *MockOIDC) validateRefreshParams(rw http.ResponseWriter, req *http.Request) bool {
+	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
+	valid := assertPresence([]string{"refresh_token"}, rw, req)
+	if !valid {
 		return false
 	}
-	equal = assertEqual("grant_type", "authorization_code",
+
+	equal := assertEqual("grant_type", "refresh_token",
 		unsupportedGrantType, "Invalid grant type", rw, req)
 	if !equal {
 		return false
@@ -188,7 +254,7 @@ func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session) error {
 // Access Token. Data is scoped down to the session's access scope set in the
 // initial `authorization_endpoint` call.
 func (m *MockOIDC) Userinfo(rw http.ResponseWriter, req *http.Request) {
-	token := m.authorizeToken(rw, req)
+	token := m.validateBearerToken(rw, req)
 	if token == nil {
 		return
 	}
@@ -224,7 +290,7 @@ func (m *MockOIDC) JWKS(rw http.ResponseWriter, _ *http.Request) {
 	jsonResponse(rw, jwks)
 }
 
-func (m *MockOIDC) authorizeToken(rw http.ResponseWriter, req *http.Request) *jwt.Token {
+func (m *MockOIDC) validateBearerToken(rw http.ResponseWriter, req *http.Request) *jwt.Token {
 	authz := req.Header.Get("Authorization")
 	parts := strings.Split(authz, " ")
 	if len(parts) < 2 || parts[0] != "Bearer" {
@@ -232,32 +298,40 @@ func (m *MockOIDC) authorizeToken(rw http.ResponseWriter, req *http.Request) *jw
 			http.StatusUnauthorized)
 		return nil
 	}
-	token, err := m.Keypair.VerifyJWT(parts[1])
+
+	token, ok := m.authorizeTokenString(parts[1], rw, req)
+	if ok {
+		return token
+	}
+
+	return nil
+}
+
+func (m *MockOIDC) authorizeTokenString(tokenString string, rw http.ResponseWriter, req *http.Request) (*jwt.Token, bool) {
+	token, err := m.Keypair.VerifyJWT(tokenString)
 	if err != nil {
-		errorResponse(rw, invalidRequest, fmt.Sprintf("Invalid token: %v", err),
-			http.StatusUnauthorized)
-		return nil
+		errorResponse(rw, invalidRequest, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+		return nil, false
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		internalServerError(rw, "Unable to extract token claims")
-		return nil
+		return nil, false
 	}
-	exp, err := strconv.Atoi(claims["exp"].(string))
+	exp := claims["exp"].(float64)
 	if err != nil {
 		internalServerError(rw, err.Error())
-		return nil
+		return nil, false
 	}
-	if time.Unix(int64(exp), 0).After(m.Now()) {
-		errorResponse(rw, invalidRequest, "The token is expired",
-			http.StatusUnauthorized)
-		return nil
+	if m.Now().Unix() > int64(exp) {
+		errorResponse(rw, invalidRequest, "The token is expired", http.StatusUnauthorized)
+		return nil, false
 	}
-	return token
+	return token, true
 }
 
-func validatePresence(params []string, rw http.ResponseWriter, req *http.Request) bool {
+func assertPresence(params []string, rw http.ResponseWriter, req *http.Request) bool {
 	for _, param := range params {
 		if req.Form.Get(param) != "" {
 			continue
