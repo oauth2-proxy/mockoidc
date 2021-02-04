@@ -1,7 +1,10 @@
 package mockoidc_test
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,8 +14,9 @@ import (
 )
 
 const (
-	audience = "mockoidc"
-	issuer   = "https://github.com/oauth2-proxy/mockoidc/"
+	audience   = "mockoidc"
+	issuer     = "https://github.com/oauth2-proxy/mockoidc/"
+	defaultKid = "dHXTSCyouq6DiWaQwlXtNP54-C75mw3IcoYkERfl3fQ"
 )
 
 var (
@@ -27,7 +31,33 @@ var (
 	}
 )
 
-func TestSignJWTVerifyJWT(t *testing.T) {
+func TestDefaultKeypair(t *testing.T) {
+	keypair, err := mockoidc.DefaultKeypair()
+	assert.NoError(t, err)
+
+	keyBytes := x509.MarshalPKCS1PrivateKey(keypair.PrivateKey)
+	pem := pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: keyBytes,
+		},
+	)
+	assert.Equal(t, mockoidc.DefaultPrivateKey, strings.TrimRight(string(pem), "\n"))
+
+	kid, err := keypair.KeyID()
+	assert.NoError(t, err)
+	assert.Equal(t, kid, defaultKid)
+}
+
+func TestKeypair_JWKS(t *testing.T) {
+	keypair, err := mockoidc.DefaultKeypair()
+	assert.NoError(t, err)
+
+	_, err = keypair.JWKS()
+	assert.NoError(t, err)
+}
+
+func TestKeypair_SignJWTVerifyJWT(t *testing.T) {
 	for _, size := range []int{512, 1024, 2048} {
 		t.Run(fmt.Sprintf("%d", size), func(t *testing.T) {
 			alice, err := mockoidc.RandomKeypair(size)
