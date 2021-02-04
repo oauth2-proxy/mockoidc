@@ -34,6 +34,12 @@ const (
 // It is the initial request that "authenticates" a user in the OAuth2
 // flow and redirects the client to the application `redirect_uri`.
 func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
+	err := req.ParseForm()
+	if err != nil {
+		internalServerError(rw, err.Error())
+		return
+	}
+
 	valid := validateParams(
 		[]string{"scope", "state", "client_id", "response_type", "redirect_uri"}, rw, req)
 	if !valid {
