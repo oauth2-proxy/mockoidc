@@ -114,7 +114,7 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 		Handler:   handler,
 		TLSConfig: cfg,
 	}
-	//
+	// Track this to know if we are https
 	m.tlsConfig = cfg
 
 	go func() {
@@ -184,6 +184,7 @@ func (m *MockOIDC) Synchronize() TimeReset {
 	return func() { jwt.TimeFunc = original }
 }
 
+// Addr returns the server address (if started)
 func (m *MockOIDC) Addr() string {
 	if m.Server == nil {
 		return ""
@@ -195,6 +196,7 @@ func (m *MockOIDC) Addr() string {
 	return fmt.Sprintf("%s://%s", proto, m.Server.Addr)
 }
 
+// Issuer returns the OIDC Issuer that will be in `iss` token claims
 func (m *MockOIDC) Issuer() string {
 	if m.Server == nil {
 		return ""
@@ -202,6 +204,7 @@ func (m *MockOIDC) Issuer() string {
 	return m.Addr() + IssuerBase
 }
 
+// DiscoveryEndpoint returns the full `/.well-known/openid-configurtion` URL
 func (m *MockOIDC) DiscoveryEndpoint() string {
 	if m.Server == nil {
 		return ""
@@ -209,6 +212,7 @@ func (m *MockOIDC) DiscoveryEndpoint() string {
 	return m.Addr() + DiscoveryEndpoint
 }
 
+// AuthorizationEndpoint returns the OIDC `authorization_endpoint`
 func (m *MockOIDC) AuthorizationEndpoint() string {
 	if m.Server == nil {
 		return ""
@@ -216,6 +220,7 @@ func (m *MockOIDC) AuthorizationEndpoint() string {
 	return m.Addr() + AuthorizationEndpoint
 }
 
+// TokenEndpoint returns the OIDC `token_endpoint`
 func (m *MockOIDC) TokenEndpoint() string {
 	if m.Server == nil {
 		return ""
@@ -223,6 +228,7 @@ func (m *MockOIDC) TokenEndpoint() string {
 	return m.Addr() + TokenEndpoint
 }
 
+// UserinfoEndpoint returns the OIDC `userinfo_endpoint`
 func (m *MockOIDC) UserinfoEndpoint() string {
 	if m.Server == nil {
 		return ""
@@ -230,6 +236,7 @@ func (m *MockOIDC) UserinfoEndpoint() string {
 	return m.Addr() + UserinfoEndpoint
 }
 
+// JWKSEndpoint returns the OIDC `jwks_uri`
 func (m *MockOIDC) JWKSEndpoint() string {
 	if m.Server == nil {
 		return ""
