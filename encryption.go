@@ -37,12 +37,15 @@ const DefaultKey = `MIIEowIBAAKCAQEAtI1Jf2zmfwLzpAjVarORtjKtmCHQtgNxqWDdVNVa` +
 	`b-reOmP3tZyZxDyX2zFyjkJpu2SWd5TlAL59vP3dzx-uyj6boWCCZHxzepli5eHXOeVW-S-` +
 	`gwlCAF0U0n_XJ7Qhv0_SQnxSqT-D6V1-KbbeXnO7w`
 
+// Keypair is an RSA Keypair & JWT KeyID used for OIDC Token signing
 type Keypair struct {
 	PrivateKey *rsa.PrivateKey
 	PublicKey  *rsa.PublicKey
 	Kid        string
 }
 
+// NewKeypair makes a Keypair off the provided rsa.PrivateKey or returns
+// the package default if nil was passed
 func NewKeypair(key *rsa.PrivateKey) (*Keypair, error) {
 	if key == nil {
 		return DefaultKeypair()
@@ -54,6 +57,9 @@ func NewKeypair(key *rsa.PrivateKey) (*Keypair, error) {
 	}, nil
 }
 
+// RandomKeypair creates a random rsa.PrivateKey and generates a key pair.
+// This can be compute intensive, and should be avoided if called many
+// times in a test suite.
 func RandomKeypair(size int) (*Keypair, error) {
 	key, err := rsa.GenerateKey(rand.Reader, size)
 	if err != nil {
@@ -66,6 +72,7 @@ func RandomKeypair(size int) (*Keypair, error) {
 	}, nil
 }
 
+// Returns the default Keypair built from DefaultKey
 func DefaultKeypair() (*Keypair, error) {
 	keyBytes, err := base64.RawURLEncoding.DecodeString(DefaultKey)
 	if err != nil {
@@ -82,6 +89,7 @@ func DefaultKeypair() (*Keypair, error) {
 	}, nil
 }
 
+// If not manually set, computes the JWT headers' `kid`
 func (k *Keypair) KeyID() (string, error) {
 	if k.Kid != "" {
 		return k.Kid, nil
@@ -103,6 +111,7 @@ func (k *Keypair) KeyID() (string, error) {
 	return k.Kid, nil
 }
 
+// JWKS is the JSON JWKS representation of the rsa.PublicKey
 func (k *Keypair) JWKS() ([]byte, error) {
 	kid, err := k.KeyID()
 	if err != nil {
@@ -122,6 +131,7 @@ func (k *Keypair) JWKS() ([]byte, error) {
 	return json.Marshal(jwks)
 }
 
+// SignJWT signs jwt.Claims with the Keypair and returns a token string
 func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 
@@ -134,6 +144,7 @@ func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
 	return token.SignedString(k.PrivateKey)
 }
 
+// VerifyJWT verifies the signature of a token was signed with this Keypair
 func (k *Keypair) VerifyJWT(token string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		kid, err := k.KeyID()
