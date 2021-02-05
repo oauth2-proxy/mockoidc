@@ -2,7 +2,8 @@
 
 A Mock OpenID Connect Server for Authentication Unit and Integration Tests.
 
-Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium.com/in-the-weeds) Hack Day.
+Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium.com/in-the-weeds)
+2021 Q1 Hack Day.
 
 ## Usage
 
@@ -14,7 +15,8 @@ import "github.com/oauth2-proxy/mockoidc/v1"
 Start the MockOIDC Server. This will spin up a minimal OIDC server in its own
 goroutine. It will listen on localhost on a random port.
 
-Then pulls its configuration to integrate it with your application.
+Then pull its configuration to integrate it with your application. Begin
+testing!
 
 ```
 m, _ := mockoidc.Run()
@@ -63,6 +65,33 @@ m.UserinfoEndpoint()
 m.JWKSEndpoint()
 ```
 
+### Seeding Users and Codes
+
+By default, calls to the `authorization_endpoint` will start a session as if
+the `mockoidc.DefaultUser()` had logged in, and it will return a random code
+for the `token_endpoint`. The User in the session started by this call to the
+`authorization_endpoint` will be the one in the tokens returned by the
+subsequent `token_endpoint` call.
+
+These can be seeded with your own test Users & codes that will be returned:
+
+```
+m, _ := mockoidc.Run()
+defer m.Shutdown()
+
+user := &mockoidc.User{
+    // User details...
+}
+
+// Add the User to the queue, this will be returned by the next login
+m.QueueUser(user)
+
+// Preset the code returned by the next login
+m.QueueCode("12345")
+
+// ...Request to m.AuthorizationEndpoint()
+```
+
 ### Manipulating Time
 
 To accurately test token expiration scenarios, the MockOIDC server's view of
@@ -94,8 +123,54 @@ We need to synchronize our timer with theirs:
 m, _ := mockoidc.Run()
 defer m.Shutdown()
 
+// Overrides jwt.TimeFunc to m.Now
 reset := m.Synchronize()
+
 // reset is a mockoidc.ResetTime function that reverts jwt.TimeFunc to
 // its original state
 defer reset()
+```
+
+### Manual Configuration
+
+Everything started up with `mockoidc.Run()` can be done manually giving the
+opportunity to finely tune the settings:
+
+```
+// Create a fresh RSA Private Key for token signing
+rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+// Create an unstarted MockOIDC server
+m, _ := mockoidc.NewServer(rsaKey)
+
+// Create the net.Listener on the exact IP:Port you want
+ln, _ := net.Listen("tcp", "127.0.0.1:8080")
+
+tlsConfig = &tls.Config{
+    // ...your TLS settings
+}
+
+// tlsConfig can be nil if you want HTTP
+m.Start(ln, tlsConfig)
+defer m.Shutdown()
+```
+
+Nearly all the MockOIDC struct is public. If you want to update any settings
+to predefined values (e.g. `clientID`, `clientSecret`, `AccessTTL`,
+`RefreshTTL`) you can before calling `m.Start`.
+
+Additional internal components of the MockOIDC server are public if you need
+to tamper with them as well:
+
+```
+type MockOIDC struct {
+	// ...other stuff
+
+	// Normally, these would be private. Expose them publicly for
+	// power users.
+	Server       *http.Server
+	Keypair      *Keypair
+	SessionStore *SessionStore
+	UserQueue    *UserQueue
+}
 ```
