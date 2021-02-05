@@ -388,7 +388,6 @@ func (m *MockOIDC) authorizeToken(t string, rw http.ResponseWriter) (*jwt.Token,
 }
 
 func assertPresence(params []string, rw http.ResponseWriter, req *http.Request) bool {
-	fmt.Printf("%v\n", req.Form)
 	for _, param := range params {
 		if req.Form.Get(param) != "" {
 			continue
