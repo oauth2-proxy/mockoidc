@@ -1,25 +1,42 @@
-package mockoidc
+package mockoidc_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/oauth2-proxy/mockoidc/v1"
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	dummyConfig = &mockoidc.Config{
+		ClientID:     "Config.ClientId",
+		ClientSecret: "Config.ClientSecret",
+		Issuer:       "issuer.example.com",
+		AccessTTL:    600,
+		RefreshTTL:   14400,
+	}
+	dummySession = &mockoidc.Session{
+		SessionID:  "DefaultSessionId",
+		Scopes:     []string{"openid", "email", "profile", "groups"},
+		OAuthState: "SomeOauthState",
+		User:       mockoidc.DefaultUser(),
+	}
+)
+
 func TestNewSessionStore(t *testing.T) {
-	ss := NewSessionStore()
+	ss := mockoidc.NewSessionStore()
 	assert.NotNil(t, ss)
 	assert.NotNil(t, ss.Store)
 }
 
-func TestNewSession(t *testing.T) {
-	ss := NewSessionStore()
+func TestSessionStore_NewSession(t *testing.T) {
+	ss := mockoidc.NewSessionStore()
 	scope := "openid profile"
 	oAuthState := "state"
 	oidcNonce := "nonce"
-	user := DefaultUser()
+	user := mockoidc.DefaultUser()
 
 	session, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
 
@@ -29,11 +46,9 @@ func TestNewSession(t *testing.T) {
 	assert.Equal(t, ss.Store[session.SessionID], session)
 }
 
-func TestAccessToken(t *testing.T) {
-	session := defaultSession()
-	config := defaultConfig()
-	keypair, _ := RandomKeypair(1024)
-	tokenString, err := session.AccessToken(&config, keypair, NowFunc())
+func TestSession_AccessToken(t *testing.T) {
+	keypair, _ := mockoidc.DefaultKeypair()
+	tokenString, err := dummySession.AccessToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
 
 	token, err := keypair.VerifyJWT(tokenString)
@@ -44,17 +59,15 @@ func TestAccessToken(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, claims)
 
-	assert.Equal(t, session.SessionID, claims["jti"])
-	assert.Equal(t, config.ClientID, claims["aud"])
-	assert.Equal(t, config.Issuer, claims["iss"])
-	assert.Equal(t, session.User.ID, claims["sub"])
-
+	assert.Equal(t, dummySession.SessionID, claims["jti"])
+	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
+	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
+	assert.Equal(t, dummySession.User.ID, claims["sub"])
 }
-func TestRefreshToken(t *testing.T) {
-	session := defaultSession()
-	config := defaultConfig()
-	keypair, _ := RandomKeypair(1024)
-	tokenString, err := session.RefreshToken(&config, keypair, NowFunc())
+
+func TestSession_RefreshToken(t *testing.T) {
+	keypair, _ := mockoidc.DefaultKeypair()
+	tokenString, err := dummySession.RefreshToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
 
 	token, err := keypair.VerifyJWT(tokenString)
@@ -65,17 +78,15 @@ func TestRefreshToken(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, claims)
 
-	assert.Equal(t, session.SessionID, claims["jti"])
-	assert.Equal(t, config.ClientID, claims["aud"])
-	assert.Equal(t, config.Issuer, claims["iss"])
-	assert.Equal(t, session.User.ID, claims["sub"])
+	assert.Equal(t, dummySession.SessionID, claims["jti"])
+	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
+	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
+	assert.Equal(t, dummySession.User.ID, claims["sub"])
 }
 
-func TestIDToken(t *testing.T) {
-	session := defaultSession()
-	config := defaultConfig()
-	keypair, _ := RandomKeypair(1024)
-	tokenString, err := session.IDToken(&config, keypair, NowFunc())
+func TestSession_IDToken(t *testing.T) {
+	keypair, _ := mockoidc.DefaultKeypair()
+	tokenString, err := dummySession.IDToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
 
 	token, err := keypair.VerifyJWT(tokenString)
@@ -86,40 +97,43 @@ func TestIDToken(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, claims)
 
-	assert.Equal(t, session.SessionID, claims["jti"])
-	assert.Equal(t, config.ClientID, claims["aud"])
-	assert.Equal(t, config.Issuer, claims["iss"])
-	assert.Equal(t, session.User.ID, claims["sub"])
+	assert.Equal(t, dummySession.SessionID, claims["jti"])
+	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
+	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
+	assert.Equal(t, dummySession.User.ID, claims["sub"])
 
-	assert.Equal(t, session.User.PreferredUsername, claims["preferred_username"])
-	assert.Equal(t, session.User.Address, claims["address"])
-	assert.Equal(t, session.User.Phone, claims["phone_number"])
-	assert.Nil(t, claims["groups"])
+	u := dummySession.User
+	assert.Equal(t, u.PreferredUsername, claims["preferred_username"])
+	assert.Equal(t, u.Address, claims["address"])
+	assert.Equal(t, u.Phone, claims["phone_number"])
+
+	groups, ok := claims["groups"].([]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, len(groups), 2)
 }
 
-func TestGetSessionByID(t *testing.T) {
-	ss := NewSessionStore()
+func TestSessionStore_GetSessionByID(t *testing.T) {
+	ss := mockoidc.NewSessionStore()
 
-	scope := "openid profile"
-	oAuthState := "state"
-	oidcNonce := "nonce"
-	user := DefaultUser()
+	const (
+		scope      = "openid email profile"
+		oAuthState = "state"
+		oidcNonce  = "nonce"
+	)
+	user := mockoidc.DefaultUser()
 	_, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
 	assert.NoError(t, err)
 
-	scope = "openid profile email"
-	oAuthState = "DifferentState"
-	oidcNonce = "nonce"
-	user2 := User{
+	user2 := &mockoidc.User{
 		ID:                "DifferentUserId",
-		Email:             "differentuser@example.com",
-		Phone:             "555-555-diff",
+		Email:             "different.user@example.com",
+		Phone:             "555-555-5555",
 		PreferredUsername: "Jon Diff",
-		Address:           "123 Diff Street, Brooklyn, NY, 11201",
-		Groups:            []string{"Kings", "Northerners", "Bastards", "Different"},
+		Address:           "123 Diff Street",
+		Groups:            []string{"another", "different"},
 		EmailVerified:     true,
 	}
-	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, &user2)
+	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, user2)
 	assert.NoError(t, err)
 
 	session, err := ss.GetSessionByID(s2.SessionID)
@@ -131,36 +145,35 @@ func TestGetSessionByID(t *testing.T) {
 	assert.Nil(t, session)
 }
 
-func TestGetSessionFromToken(t *testing.T) {
-	ss := NewSessionStore()
+func TestSessionStore_GetSessionFromToken(t *testing.T) {
+	ss := mockoidc.NewSessionStore()
 
-	scope := "openid profile"
-	oAuthState := "state"
-	oidcNonce := "nonce"
-	user := DefaultUser()
+	const (
+		scope      = "openid email profile"
+		oAuthState = "state"
+		oidcNonce  = "nonce"
+	)
+	user := mockoidc.DefaultUser()
 	_, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
 	assert.NoError(t, err)
 
-	scope = "openid profile email"
-	oAuthState = "DifferentState"
-	oidcNonce = "nonce"
-	user2 := User{
+	user2 := &mockoidc.User{
 		ID:                "DifferentUserId",
-		Email:             "differentuser@example.com",
-		Phone:             "555-555-diff",
+		Email:             "different.user@example.com",
+		Phone:             "555-555-5555",
 		PreferredUsername: "Jon Diff",
-		Address:           "123 Diff Street, Brooklyn, NY, 11201",
-		Groups:            []string{"Kings", "Northerners", "Bastards", "Different"},
+		Address:           "123 Diff Street",
+		Groups:            []string{"another", "different"},
 		EmailVerified:     true,
 	}
-	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, &user2)
+	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, user2)
 	assert.NoError(t, err)
 
-	keypair, _ := RandomKeypair(1024)
-	config := defaultConfig()
+	keypair, err := mockoidc.DefaultKeypair()
+	assert.NoError(t, err)
 
 	now := time.Now()
-	tokenString, err := s2.AccessToken(&config, keypair, now)
+	tokenString, err := s2.AccessToken(dummyConfig, keypair, now)
 	assert.NoError(t, err)
 
 	token, err := keypair.VerifyJWT(tokenString)
@@ -174,23 +187,4 @@ func TestGetSessionFromToken(t *testing.T) {
 	session, err = ss.GetSessionByToken(token)
 	assert.Error(t, err)
 	assert.Nil(t, session)
-
-}
-
-func defaultConfig() Config {
-	return Config{
-		ClientID:     "Config.ClientId",
-		ClientSecret: "Config.ClientSecret",
-		Issuer:       "issuer.example.com",
-		AccessTTL:    600,
-		RefreshTTL:   14400,
-	}
-}
-func defaultSession() Session {
-	return Session{
-		SessionID:  "DefaultSessionId",
-		Scopes:     []string{"profile", "openid"},
-		OAuthState: "SomeOauthState",
-		User:       DefaultUser(),
-	}
 }

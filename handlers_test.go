@@ -1,4 +1,4 @@
-package mockoidc
+package mockoidc_test
 
 import (
 	"encoding/json"
@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/oauth2-proxy/mockoidc/v1"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAuthorizeHandler(t *testing.T) {
-	keypair, _ := RandomKeypair(2048)
-	m, _ := NewServer(keypair.PrivateKey)
+func TestMockOIDC_Authorize(t *testing.T) {
+	m, err := mockoidc.NewServer(nil)
+	assert.NoError(t, err)
 
 	data := url.Values{}
 	data.Set("scope", "openid email profile")
@@ -25,31 +25,41 @@ func TestAuthorizeHandler(t *testing.T) {
 	data.Set("redirect_uri", "example.com")
 	data.Set("state", "testState")
 	data.Set("client_id", m.ClientID)
-	assert.HTTPError(t, m.Authorize, http.MethodGet, AuthorizeEndpoint, nil)
+	assert.HTTPError(t, m.Authorize, http.MethodGet, mockoidc.AuthorizeEndpoint, nil)
 
 	// valid request
-	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet, AuthorizeEndpoint, data, 302)
+	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
+		mockoidc.AuthorizeEndpoint, data, http.StatusFound)
 
 	// Bad client ID
 	data.Set("client_id", "wrong_id")
-	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet, AuthorizeEndpoint, data, 401)
-	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet, AuthorizeEndpoint, data, invalidClient)
+	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
+		mockoidc.AuthorizeEndpoint, data, http.StatusUnauthorized)
+	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
+		mockoidc.AuthorizeEndpoint, data, mockoidc.InvalidClient)
 
-	// Missing form value -- scope
-	for key, _ := range data {
-		newData, _ := url.ParseQuery(data.Encode())
-		newData.Del(key)
-		assert.HTTPStatusCode(t, m.Authorize, http.MethodGet, AuthorizeEndpoint, newData, 400)
-		assert.HTTPBodyContains(t, m.Authorize, http.MethodGet, AuthorizeEndpoint, newData, invalidRequest)
+	// Missing required form values
+	for key := range data {
+		t.Run(key, func(t *testing.T) {
+			badData, _ := url.ParseQuery(data.Encode())
+			badData.Del(key)
+
+			assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
+				mockoidc.AuthorizeEndpoint, badData, http.StatusBadRequest)
+			assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
+				mockoidc.AuthorizeEndpoint, badData, mockoidc.InvalidRequest)
+		})
 	}
 }
 
-func TestAccessTokenRequest(t *testing.T) {
-	keypair, _ := RandomKeypair(2048)
-	m, _ := NewServer(keypair.PrivateKey)
-	session, _ := m.SessionStore.NewSession("sessionScope", "sessionStrate", "sessionNonce", DefaultUser())
+func TestMockOIDC_Token_CodeGrant(t *testing.T) {
+	m, err := mockoidc.NewServer(nil)
+	assert.NoError(t, err)
 
-	assert.HTTPError(t, m.Token, http.MethodPost, TokenEndpoint, nil)
+	session, _ := m.SessionStore.NewSession(
+		"sessionScope", "sessionState", "sessionNonce", mockoidc.DefaultUser())
+
+	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
 
 	data := url.Values{}
 	data.Set("client_id", m.ClientID)
@@ -57,52 +67,72 @@ func TestAccessTokenRequest(t *testing.T) {
 	data.Set("code", session.SessionID)
 	data.Set("grant_type", "authorization_code")
 
-	// all values must be provided
-	for key, _ := range data {
-		newData, _ := url.ParseQuery(data.Encode())
-		newData.Del(key)
-		rr := testResponse(t, TokenEndpoint, m.Token, http.MethodPost, newData)
-		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was %d, even though %s is missing", rr.Code, key)
-		body, _ := ioutil.ReadAll(rr.Body)
-		assert.Containsf(t, string(body), invalidRequest, "Should be %s, but was not", invalidRequest)
+	// Missing parameters result in BadRequest
+	for key := range data {
+		t.Run(key, func(t *testing.T) {
+			badData, _ := url.ParseQuery(data.Encode())
+			badData.Del(key)
+
+			rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+			assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+			body, err := ioutil.ReadAll(rr.Body)
+			assert.NoError(t, err)
+			assert.Contains(t, string(body), mockoidc.InvalidRequest)
+		})
 	}
 
 	// wrong values won't work
-	for key, _ := range data {
-		newData, _ := url.ParseQuery(data.Encode())
-		newData.Set(key, "This is wrong")
-		rr := testResponse(t, TokenEndpoint, m.Token, http.MethodPost, newData)
-		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was not, even though %s is an invalid value", key)
+	for key := range data {
+		t.Run(key, func(t *testing.T) {
+			badData, err := url.ParseQuery(data.Encode())
+			assert.NoError(t, err)
+
+			badData.Set(key, "WRONG")
+			rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+			if key == "grant_type" {
+				assert.Equal(t, http.StatusBadRequest, rr.Code)
+			} else {
+				assert.Equal(t, http.StatusUnauthorized, rr.Code)
+			}
+		})
 	}
 
 	// good request; check responses
-	rr := testResponse(t, TokenEndpoint, m.Token, http.MethodPost, data)
-	assert.Equal(t, rr.Code, 200)
+	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var target *tokenResponse
-	assert.NoError(t, getJSON(rr, &target))
-	assert.NotEmpty(t, target.AccessToken)
-	assert.NotEmpty(t, target.IDToken)
-	assert.NotEmpty(t, target.RefreshToken)
-	assert.NotEmpty(t, target.TokenType)
-	assert.NotEmpty(t, target.ExpiresIn)
+	tokenResp := make(map[string]interface{})
+	err = getJSON(rr, &tokenResp)
+	assert.NoError(t, err)
 
-	var tknType *jwt.Token
-	for _, tStr := range []string{target.AccessToken, target.RefreshToken, target.IDToken} {
-		token, err := m.Keypair.VerifyJWT(tStr)
-		assert.NoError(t, err)
-		assert.IsType(t, tknType, token)
+	assert.Contains(t, tokenResp, "access_token")
+	assert.Contains(t, tokenResp, "id_token")
+	assert.Contains(t, tokenResp, "refresh_token")
+	assert.Contains(t, tokenResp, "token_type")
+	assert.Contains(t, tokenResp, "expires_in")
+
+	for _, key := range []string{
+		"access_token",
+		"refresh_token",
+		"id_token",
+	} {
+		t.Run(key, func(t *testing.T) {
+			_, err := m.Keypair.VerifyJWT(tokenResp[key].(string))
+			assert.NoError(t, err)
+		})
 	}
-	// TODO: validate returned tokens??
 }
 
-func TestRefreshTokenRequest(t *testing.T) {
-	keypair, _ := RandomKeypair(2048)
-	m, _ := NewServer(keypair.PrivateKey)
-	session, _ := m.SessionStore.NewSession("sessionScope", "sessionStrate", "sessionNonce", DefaultUser())
+func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
+	m, err := mockoidc.NewServer(nil)
+	assert.NoError(t, err)
+
+	session, _ := m.SessionStore.NewSession(
+		"sessionScope", "sessionStrate", "sessionNonce", mockoidc.DefaultUser())
 	refreshToken, _ := session.RefreshToken(m.Config(), m.Keypair, m.Now())
 
-	assert.HTTPError(t, m.Token, http.MethodPost, TokenEndpoint, nil)
+	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
 
 	data := url.Values{}
 	data.Set("client_id", m.ClientID)
@@ -110,54 +140,48 @@ func TestRefreshTokenRequest(t *testing.T) {
 	data.Set("refresh_token", refreshToken)
 	data.Set("grant_type", "refresh_token")
 
-	// all values must be provided
-	for key, _ := range data {
-		newData, _ := url.ParseQuery(data.Encode())
-		newData.Del(key)
-		rr := testResponse(t, TokenEndpoint, m.Token, http.MethodPost, newData)
-		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was %d, even though %s is missing", rr.Code, key)
-		body, _ := ioutil.ReadAll(rr.Body)
-		assert.Containsf(t, string(body), invalidRequest, "Should be %s, but was not", invalidRequest)
-	}
-
-	// wrong values won't work
-	for key, _ := range data {
-		newData, _ := url.ParseQuery(data.Encode())
-		newData.Set(key, "This is wrong")
-		rr := testResponse(t, TokenEndpoint, m.Token, http.MethodPost, newData)
-		assert.GreaterOrEqualf(t, rr.Code, 400, "Should be error but was not, even though %s is an invalid value", key)
-	}
-
 	// good request; check responses
-	rr := testResponse(t, TokenEndpoint, m.Token, http.MethodPost, data)
-	assert.Equal(t, 200, rr.Code)
-	body, _ := ioutil.ReadAll(rr.Body)
-	assert.Contains(t, string(body), "refresh_token")
+	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, http.StatusOK, rr.Code)
 
-	refreshToken, _ = session.RefreshToken(m.Config(), m.Keypair, m.Now().Add(time.Hour*time.Duration(-24)))
-	data.Set("refresh_token", refreshToken)
-	rr = testResponse(t, TokenEndpoint, m.Token, http.MethodPost, data)
-	assert.Equal(t, 401, rr.Code)
-	body, _ = ioutil.ReadAll(rr.Body)
-	assert.Contains(t, string(body), invalidRequest)
-	// var target *tokenResponse
-	// assert.NoError(t, getJSON(rr, &target))
-	// assert.NotEmpty(t, target.AccessToken)
-	// assert.NotEmpty(t, target.IDToken)
-	// assert.NotEmpty(t, target.RefreshToken)
-	// assert.NotEmpty(t, target.TokenType)
-	// assert.NotEmpty(t, target.ExpiresIn)
+	tokenResp := make(map[string]interface{})
+	err = getJSON(rr, &tokenResp)
+	assert.NoError(t, err)
 
-	// var tknType *jwt.Token
-	// for _, tStr := range []string{target.AccessToken, target.RefreshToken, target.IDToken} {
-	// 	token, err := m.Keypair.VerifyJWT(tStr)
-	// 	assert.NoError(t, err)
-	// 	assert.IsType(t, tknType, token)
-	// }
+	assert.Contains(t, tokenResp, "access_token")
+	assert.Contains(t, tokenResp, "id_token")
+	assert.Contains(t, tokenResp, "refresh_token")
+	assert.Contains(t, tokenResp, "token_type")
+	assert.Contains(t, tokenResp, "expires_in")
+
+	for _, key := range []string{
+		"access_token",
+		"refresh_token",
+		"id_token",
+	} {
+		t.Run(key, func(t *testing.T) {
+			_, err := m.Keypair.VerifyJWT(tokenResp[key].(string))
+			assert.NoError(t, err)
+		})
+	}
+
+	// expired refresh token
+	expiredToken, err := session.RefreshToken(
+		m.Config(), m.Keypair, m.Now().Add(time.Hour*time.Duration(-24)))
+	assert.NoError(t, err)
+
+	data.Set("refresh_token", expiredToken)
+
+	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	body, err := ioutil.ReadAll(rr.Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), mockoidc.InvalidRequest)
 }
 
 func TestMockOIDC_Discovery(t *testing.T) {
-	m := &MockOIDC{
+	m := &mockoidc.MockOIDC{
 		Server: &http.Server{
 			Addr: "127.0.0.1:8080",
 		},
@@ -170,10 +194,10 @@ func TestMockOIDC_Discovery(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, oidcCfg["issuer"], m.Issuer())
-	assert.Equal(t, oidcCfg["authorization_endpoint"], m.Issuer()+AuthorizeEndpoint)
-	assert.Equal(t, oidcCfg["token_endpoint"], m.Issuer()+TokenEndpoint)
-	assert.Equal(t, oidcCfg["userinfo_endpoint"], m.Issuer()+UserinfoEndpoint)
-	assert.Equal(t, oidcCfg["jwks_uri"], m.Issuer()+JWKSEndpoint)
+	assert.Equal(t, oidcCfg["authorization_endpoint"], m.Issuer()+mockoidc.AuthorizeEndpoint)
+	assert.Equal(t, oidcCfg["token_endpoint"], m.Issuer()+mockoidc.TokenEndpoint)
+	assert.Equal(t, oidcCfg["userinfo_endpoint"], m.Issuer()+mockoidc.UserinfoEndpoint)
+	assert.Equal(t, oidcCfg["jwks_uri"], m.Issuer()+mockoidc.JWKSEndpoint)
 }
 
 func getJSON(res *httptest.ResponseRecorder, target interface{}) error {

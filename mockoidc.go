@@ -148,7 +148,7 @@ func (m *MockOIDC) Issuer() string {
 	if m.Server.TLSConfig != nil {
 		proto = "https"
 	}
-	return fmt.Sprintf("%s://%s%s", proto, m.Server.Addr, issuerBase)
+	return fmt.Sprintf("%s://%s%s", proto, m.Server.Addr, IssuerBase)
 }
 
 // QueueUser allows adding mock User objects to the authentication queue.
