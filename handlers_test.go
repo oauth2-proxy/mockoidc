@@ -122,6 +122,10 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+
+	// duplicate attempts are rejects
+	rrDup := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, http.StatusUnauthorized, rrDup.Code)
 }
 
 func TestMockOIDC_Token_RefreshGrant(t *testing.T) {

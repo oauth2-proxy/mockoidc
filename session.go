@@ -15,6 +15,7 @@ type Session struct {
 	OAuthState string
 	OIDCNonce  string
 	User       *User
+	Granted    bool
 }
 
 // SessionStore manages our Session objects
