@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/oauth2-proxy/mockoidc/v1"
@@ -28,10 +27,8 @@ func TestRun(t *testing.T) {
 	defer m.Shutdown()
 
 	// Override jwt.TimeFunc with our timer
-	m.Synchronize()
-	defer func() {
-		jwt.TimeFunc = time.Now
-	}()
+	reset := m.Synchronize()
+	defer reset()
 
 	// ************************************************************************
 	// Stage 0: Get Discovery documents
