@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	IssuerBase        = "/oidc"
-	AuthorizeEndpoint = "/oidc/authorize"
-	TokenEndpoint     = "/oidc/token"
-	UserinfoEndpoint  = "/oidc/userinfo"
-	JWKSEndpoint      = "/oidc/.well-known/jwks.json"
-	DiscoveryEndpoint = "/oidc/.well-known/openid-configuration"
+	IssuerBase            = "/oidc"
+	AuthorizationEndpoint = "/oidc/authorize"
+	TokenEndpoint         = "/oidc/token"
+	UserinfoEndpoint      = "/oidc/userinfo"
+	JWKSEndpoint          = "/oidc/.well-known/jwks.json"
+	DiscoveryEndpoint     = "/oidc/.well-known/openid-configuration"
 
 	InvalidRequest       = "invalid_request"
 	InvalidClient        = "invalid_client"
@@ -317,7 +317,7 @@ type discoveryResponse struct {
 func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
 	discovery := &discoveryResponse{
 		Issuer:                m.Issuer(),
-		AuthorizationEndpoint: m.Issuer() + AuthorizeEndpoint,
+		AuthorizationEndpoint: m.Issuer() + AuthorizationEndpoint,
 		TokenEndpoint:         m.Issuer() + TokenEndpoint,
 		JWKSUri:               m.Issuer() + JWKSEndpoint,
 		UserinfoEndpoint:      m.Issuer() + UserinfoEndpoint,
@@ -388,11 +388,11 @@ func (m *MockOIDC) authorizeToken(t string, rw http.ResponseWriter) (*jwt.Token,
 }
 
 func assertPresence(params []string, rw http.ResponseWriter, req *http.Request) bool {
+	fmt.Printf("%v\n", req.Form)
 	for _, param := range params {
 		if req.Form.Get(param) != "" {
 			continue
 		}
-
 		errorResponse(
 			rw,
 			InvalidRequest,

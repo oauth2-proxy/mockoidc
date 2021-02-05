@@ -25,18 +25,18 @@ func TestMockOIDC_Authorize(t *testing.T) {
 	data.Set("redirect_uri", "example.com")
 	data.Set("state", "testState")
 	data.Set("client_id", m.ClientID)
-	assert.HTTPError(t, m.Authorize, http.MethodGet, mockoidc.AuthorizeEndpoint, nil)
+	assert.HTTPError(t, m.Authorize, http.MethodGet, mockoidc.AuthorizationEndpoint, nil)
 
 	// valid request
 	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizeEndpoint, data, http.StatusFound)
+		mockoidc.AuthorizationEndpoint, data, http.StatusFound)
 
 	// Bad client ID
 	data.Set("client_id", "wrong_id")
 	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizeEndpoint, data, http.StatusUnauthorized)
+		mockoidc.AuthorizationEndpoint, data, http.StatusUnauthorized)
 	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizeEndpoint, data, mockoidc.InvalidClient)
+		mockoidc.AuthorizationEndpoint, data, mockoidc.InvalidClient)
 
 	// Missing required form values
 	for key := range data {
@@ -45,9 +45,9 @@ func TestMockOIDC_Authorize(t *testing.T) {
 			badData.Del(key)
 
 			assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-				mockoidc.AuthorizeEndpoint, badData, http.StatusBadRequest)
+				mockoidc.AuthorizationEndpoint, badData, http.StatusBadRequest)
 			assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
-				mockoidc.AuthorizeEndpoint, badData, mockoidc.InvalidRequest)
+				mockoidc.AuthorizationEndpoint, badData, mockoidc.InvalidRequest)
 		})
 	}
 }
@@ -194,7 +194,7 @@ func TestMockOIDC_Discovery(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, oidcCfg["issuer"], m.Issuer())
-	assert.Equal(t, oidcCfg["authorization_endpoint"], m.Issuer()+mockoidc.AuthorizeEndpoint)
+	assert.Equal(t, oidcCfg["authorization_endpoint"], m.Issuer()+mockoidc.AuthorizationEndpoint)
 	assert.Equal(t, oidcCfg["token_endpoint"], m.Issuer()+mockoidc.TokenEndpoint)
 	assert.Equal(t, oidcCfg["userinfo_endpoint"], m.Issuer()+mockoidc.UserinfoEndpoint)
 	assert.Equal(t, oidcCfg["jwks_uri"], m.Issuer()+mockoidc.JWKSEndpoint)

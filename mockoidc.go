@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 // NowFunc is an overrideable version of `time.Now`. Tests that need to
@@ -31,6 +33,7 @@ type MockOIDC struct {
 	SessionStore *SessionStore
 	UserQueue    *UserQueue
 
+	tlsConfig   *tls.Config
 	fastForward time.Duration
 }
 
@@ -100,7 +103,7 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	}
 
 	handler := http.NewServeMux()
-	handler.HandleFunc(AuthorizeEndpoint, m.Authorize)
+	handler.HandleFunc(AuthorizationEndpoint, m.Authorize)
 	handler.HandleFunc(TokenEndpoint, m.Token)
 	handler.HandleFunc(UserinfoEndpoint, m.Userinfo)
 	handler.HandleFunc(JWKSEndpoint, m.JWKS)
@@ -111,6 +114,8 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 		Handler:   handler,
 		TLSConfig: cfg,
 	}
+	//
+	m.tlsConfig = cfg
 
 	go func() {
 		err := m.Server.Serve(ln)
@@ -139,18 +144,6 @@ func (m *MockOIDC) Config() *Config {
 	}
 }
 
-// Issuer returns the OIDC Issuer URL of this MockOIDC server
-func (m *MockOIDC) Issuer() string {
-	if m.Server == nil {
-		return ""
-	}
-	proto := "http"
-	if m.Server.TLSConfig != nil {
-		proto = "https"
-	}
-	return fmt.Sprintf("%s://%s%s", proto, m.Server.Addr, IssuerBase)
-}
-
 // QueueUser allows adding mock User objects to the authentication queue.
 // Calls to the `authorization_endpoint` will pop these mock User objects
 // off the queue and create a session with them.
@@ -176,4 +169,62 @@ func (m *MockOIDC) FastForward(d time.Duration) time.Duration {
 // Now is what MockOIDC thinks time.Now is
 func (m *MockOIDC) Now() time.Time {
 	return NowFunc().Add(m.fastForward)
+}
+
+// Synchronize sets the jwt.TimeFunc to our mutated view of time
+func (m *MockOIDC) Synchronize() {
+	jwt.TimeFunc = m.Now
+}
+
+func (m *MockOIDC) Addr() string {
+	if m.Server == nil {
+		return ""
+	}
+	proto := "http"
+	if m.tlsConfig != nil {
+		proto = "https"
+	}
+	return fmt.Sprintf("%s://%s", proto, m.Server.Addr)
+}
+
+func (m *MockOIDC) Issuer() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + IssuerBase
+}
+
+func (m *MockOIDC) DiscoveryEndpoint() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + DiscoveryEndpoint
+}
+
+func (m *MockOIDC) AuthorizationEndpoint() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + AuthorizationEndpoint
+}
+
+func (m *MockOIDC) TokenEndpoint() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + TokenEndpoint
+}
+
+func (m *MockOIDC) UserinfoEndpoint() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + UserinfoEndpoint
+}
+
+func (m *MockOIDC) JWKSEndpoint() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + JWKSEndpoint
 }
