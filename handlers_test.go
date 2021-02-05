@@ -57,7 +57,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	assert.NoError(t, err)
 
 	session, _ := m.SessionStore.NewSession(
-		"sessionScope", "sessionState", "sessionNonce", mockoidc.DefaultUser())
+		"sessionScope", "sessionNonce", mockoidc.DefaultUser())
 
 	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
 
@@ -133,7 +133,7 @@ func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
 	assert.NoError(t, err)
 
 	session, _ := m.SessionStore.NewSession(
-		"sessionScope", "sessionStrate", "sessionNonce", mockoidc.DefaultUser())
+		"sessionScope", "sessionNonce", mockoidc.DefaultUser())
 	refreshToken, _ := session.RefreshToken(m.Config(), m.Keypair, m.Now())
 
 	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)

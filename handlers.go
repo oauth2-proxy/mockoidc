@@ -96,7 +96,6 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 
 	session, err := m.SessionStore.NewSession(
 		req.Form.Get("scope"),
-		req.Form.Get("state"),
 		req.Form.Get("nonce"),
 		m.UserQueue.Pop(),
 	)
