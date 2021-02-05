@@ -24,8 +24,8 @@ const (
 	InvalidClient        = "invalid_client"
 	InvalidGrant         = "invalid_grant"
 	UnsupportedGrantType = "unsupported_grant_type"
-	//invalidScope       = "invalid_scope"
-	//unauthorizedClient = "unauthorized_client"
+	//InvalidScope       = "invalid_scope"
+	//UnauthorizedClient = "unauthorized_client"
 
 	applicationJSON = "application/json"
 )
@@ -141,43 +141,40 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ok := m.sharedParamsValidator(rw, req)
-	if !ok {
+	if !m.validateTokenParams(rw, req) {
 		return
 	}
 
-	var session *Session
+	var (
+		session *Session
+		valid   bool
+	)
 	grantType := req.Form.Get("grant_type")
 	switch grantType {
 	case "authorization_code":
-		s, ok := m.accessRequestValidator(rw, req)
-		if !ok {
+		if session, valid = m.validateCodeGrant(rw, req); !valid {
 			return
 		}
-		session = s
 	case "refresh_token":
-		s, ok := m.refreshRequestValidator(rw, req)
-		if !ok {
+		if session, valid = m.validateRefreshGrant(rw, req); !valid {
 			return
 		}
-		session = s
 	default:
-		errorResponse(rw, InvalidRequest, "Invalid grant_type", http.StatusBadRequest)
+		errorResponse(rw, InvalidRequest,
+			fmt.Sprintf("Invalid grant type: %s", grantType), http.StatusBadRequest)
 		return
 	}
 
+	refresh := grantType == "refresh_token"
 	tr := &tokenResponse{
-		TokenType: "bearer",
-		ExpiresIn: m.AccessTTL,
+		RefreshToken: req.Form.Get("refresh_token"),
+		TokenType:    "bearer",
+		ExpiresIn:    m.AccessTTL,
 	}
-	err = m.setTokens(tr, session)
+	err = m.setTokens(tr, session, refresh)
 	if err != nil {
 		internalServerError(rw, err.Error())
 		return
-	}
-
-	if grantType == "refresh_token" {
-		tr.RefreshToken = req.Form.Get("refresh_token")
 	}
 
 	resp, err := json.Marshal(tr)
@@ -185,31 +182,39 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 		internalServerError(rw, err.Error())
 		return
 	}
-
 	noCache(rw)
 	jsonResponse(rw, resp)
 }
 
-func (m *MockOIDC) sharedParamsValidator(rw http.ResponseWriter, req *http.Request) bool {
-	ok := assertPresence([]string{"client_id", "client_secret", "grant_type"}, rw, req)
-	if !ok {
+func (m *MockOIDC) validateTokenParams(rw http.ResponseWriter, req *http.Request) bool {
+	if !assertPresence([]string{"client_id", "client_secret", "grant_type"}, rw, req) {
 		return false
 	}
-	equal := assertEqual("client_id", m.ClientID, InvalidClient, "Invalid client id", rw, req)
+
+	equal := assertEqual("client_id", m.ClientID,
+		InvalidClient, "Invalid client id", rw, req)
 	if !equal {
 		return false
 	}
-	equal = assertEqual("client_secret", m.ClientSecret, InvalidClient, "Invalid client secret", rw, req)
+	equal = assertEqual("client_secret", m.ClientSecret,
+		InvalidClient, "Invalid client secret", rw, req)
 	if !equal {
 		return false
 	}
+
 	return true
 }
 
-func (m *MockOIDC) accessRequestValidator(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
-	if !m.validateAccessParams(rw, req) {
+func (m *MockOIDC) validateCodeGrant(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
+	if !assertPresence([]string{"code"}, rw, req) {
 		return nil, false
 	}
+	equal := assertEqual("grant_type", "authorization_code",
+		UnsupportedGrantType, "Invalid grant type", rw, req)
+	if !equal {
+		return nil, false
+	}
+
 	code := req.Form.Get("code")
 	session, err := m.SessionStore.GetSessionByID(code)
 	if err != nil {
@@ -217,18 +222,27 @@ func (m *MockOIDC) accessRequestValidator(rw http.ResponseWriter, req *http.Requ
 			http.StatusUnauthorized)
 		return nil, false
 	}
+
 	return session, true
 }
 
-func (m *MockOIDC) refreshRequestValidator(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
-	if !m.validateRefreshParams(rw, req) {
+func (m *MockOIDC) validateRefreshGrant(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
+	if !assertPresence([]string{"refresh_token"}, rw, req) {
 		return nil, false
 	}
+
+	equal := assertEqual("grant_type", "refresh_token",
+		UnsupportedGrantType, "Invalid grant type", rw, req)
+	if !equal {
+		return nil, false
+	}
+
 	refreshToken := req.Form.Get("refresh_token")
-	token, ok := m.authorizeTokenString(refreshToken, rw)
-	if !ok {
+	token, authorized := m.authorizeToken(refreshToken, rw)
+	if !authorized {
 		return nil, false
 	}
+
 	session, err := m.SessionStore.GetSessionByToken(token)
 	if err != nil {
 		errorResponse(rw, InvalidGrant, "Invalid refresh token",
@@ -236,52 +250,23 @@ func (m *MockOIDC) refreshRequestValidator(rw http.ResponseWriter, req *http.Req
 		return nil, false
 	}
 	return session, true
-
 }
 
-func (m *MockOIDC) validateAccessParams(rw http.ResponseWriter, req *http.Request) bool {
-	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
-	valid := assertPresence([]string{"code"}, rw, req)
-	if !valid {
-		return false
-	}
-
-	equal := assertEqual("grant_type", "authorization_code",
-		UnsupportedGrantType, "Invalid grant type", rw, req)
-	if !equal {
-		return false
-	}
-
-	return true
-}
-
-func (m *MockOIDC) validateRefreshParams(rw http.ResponseWriter, req *http.Request) bool {
-	// TODO (@NickMeves): Support `redirect_uri` in session and check that here
-	valid := assertPresence([]string{"refresh_token"}, rw, req)
-	if !valid {
-		return false
-	}
-
-	equal := assertEqual("grant_type", "refresh_token",
-		UnsupportedGrantType, "Invalid grant type", rw, req)
-	if !equal {
-		return false
-	}
-
-	return true
-}
-
-func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session) error {
+func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session, refresh bool) error {
 	var err error
 	tr.AccessToken, err = s.AccessToken(m.Config(), m.Keypair, m.Now())
 	if err != nil {
 		return err
 	}
-	tr.RefreshToken, err = s.RefreshToken(m.Config(), m.Keypair, m.Now())
+	tr.IDToken, err = s.IDToken(m.Config(), m.Keypair, m.Now())
 	if err != nil {
 		return err
 	}
-	tr.IDToken, err = s.IDToken(m.Config(), m.Keypair, m.Now())
+
+	if refresh {
+		return nil
+	}
+	tr.RefreshToken, err = s.RefreshToken(m.Config(), m.Keypair, m.Now())
 	if err != nil {
 		return err
 	}
@@ -292,8 +277,8 @@ func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session) error {
 // Access Token. Data is scoped down to the session's access scope set in the
 // initial `authorization_endpoint` call.
 func (m *MockOIDC) Userinfo(rw http.ResponseWriter, req *http.Request) {
-	token := m.validateBearerToken(rw, req)
-	if token == nil {
+	token, authorized := m.authorizeBearer(rw, req)
+	if !authorized {
 		return
 	}
 
@@ -366,25 +351,20 @@ func (m *MockOIDC) JWKS(rw http.ResponseWriter, _ *http.Request) {
 	jsonResponse(rw, jwks)
 }
 
-func (m *MockOIDC) validateBearerToken(rw http.ResponseWriter, req *http.Request) *jwt.Token {
+func (m *MockOIDC) authorizeBearer(rw http.ResponseWriter, req *http.Request) (*jwt.Token, bool) {
 	authz := req.Header.Get("Authorization")
 	parts := strings.Split(authz, " ")
 	if len(parts) < 2 || parts[0] != "Bearer" {
 		errorResponse(rw, InvalidRequest, "Invalid authorization header",
 			http.StatusUnauthorized)
-		return nil
+		return nil, false
 	}
 
-	token, ok := m.authorizeTokenString(parts[1], rw)
-	if ok {
-		return token
-	}
-
-	return nil
+	return m.authorizeToken(parts[1], rw)
 }
 
-func (m *MockOIDC) authorizeTokenString(tokenString string, rw http.ResponseWriter) (*jwt.Token, bool) {
-	token, err := m.Keypair.VerifyJWT(tokenString)
+func (m *MockOIDC) authorizeToken(t string, rw http.ResponseWriter) (*jwt.Token, bool) {
+	token, err := m.Keypair.VerifyJWT(t)
 	if err != nil {
 		errorResponse(rw, InvalidRequest, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
 		return nil, false
