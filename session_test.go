@@ -18,10 +18,9 @@ var (
 		RefreshTTL:   14400,
 	}
 	dummySession = &mockoidc.Session{
-		SessionID:  "DefaultSessionId",
-		Scopes:     []string{"openid", "email", "profile", "groups"},
-		OAuthState: "SomeOauthState",
-		User:       mockoidc.DefaultUser(),
+		SessionID: "DefaultSessionId",
+		Scopes:    []string{"openid", "email", "profile", "groups"},
+		User:      mockoidc.DefaultUser(),
 	}
 )
 
@@ -33,15 +32,16 @@ func TestNewSessionStore(t *testing.T) {
 
 func TestSessionStore_NewSession(t *testing.T) {
 	ss := mockoidc.NewSessionStore()
-	scope := "openid profile"
-	oAuthState := "state"
-	oidcNonce := "nonce"
+	const (
+		scope     = "openid email profile"
+		oidcNonce = "nonce"
+	)
 	user := mockoidc.DefaultUser()
 
-	session, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
+	session, err := ss.NewSession(scope, oidcNonce, user)
 
 	assert.NoError(t, err)
-	assert.Equal(t, session.Scopes, []string{"openid", "profile"})
+	assert.Equal(t, session.Scopes, []string{"openid", "email", "profile"})
 	assert.Equal(t, len(ss.Store), 1)
 	assert.Equal(t, ss.Store[session.SessionID], session)
 }
@@ -116,12 +116,11 @@ func TestSessionStore_GetSessionByID(t *testing.T) {
 	ss := mockoidc.NewSessionStore()
 
 	const (
-		scope      = "openid email profile"
-		oAuthState = "state"
-		oidcNonce  = "nonce"
+		scope     = "openid email profile"
+		oidcNonce = "nonce"
 	)
 	user := mockoidc.DefaultUser()
-	_, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
+	_, err := ss.NewSession(scope, oidcNonce, user)
 	assert.NoError(t, err)
 
 	user2 := &mockoidc.User{
@@ -133,7 +132,7 @@ func TestSessionStore_GetSessionByID(t *testing.T) {
 		Groups:            []string{"another", "different"},
 		EmailVerified:     true,
 	}
-	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, user2)
+	s2, err := ss.NewSession(scope, oidcNonce, user2)
 	assert.NoError(t, err)
 
 	session, err := ss.GetSessionByID(s2.SessionID)
@@ -149,12 +148,11 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 	ss := mockoidc.NewSessionStore()
 
 	const (
-		scope      = "openid email profile"
-		oAuthState = "state"
-		oidcNonce  = "nonce"
+		scope     = "openid email profile"
+		oidcNonce = "nonce"
 	)
 	user := mockoidc.DefaultUser()
-	_, err := ss.NewSession(scope, oAuthState, oidcNonce, user)
+	_, err := ss.NewSession(scope, oidcNonce, user)
 	assert.NoError(t, err)
 
 	user2 := &mockoidc.User{
@@ -166,7 +164,7 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 		Groups:            []string{"another", "different"},
 		EmailVerified:     true,
 	}
-	s2, err := ss.NewSession(scope, oAuthState, oidcNonce, user2)
+	s2, err := ss.NewSession(scope, oidcNonce, user2)
 	assert.NoError(t, err)
 
 	keypair, err := mockoidc.DefaultKeypair()

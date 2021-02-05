@@ -50,7 +50,7 @@ type Config struct {
 
 // NewServer configures a new MockOIDC that isn't started. An existing
 // rsa.PrivateKey can be passed for token signing operations in case
-// randomly generating them on each test run is too compute intensive.
+// the default Keypair isn't desired.
 func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 	clientID, err := randomNonce(24)
 	if err != nil {
