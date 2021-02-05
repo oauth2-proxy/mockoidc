@@ -217,11 +217,12 @@ func (m *MockOIDC) validateCodeGrant(rw http.ResponseWriter, req *http.Request) 
 
 	code := req.Form.Get("code")
 	session, err := m.SessionStore.GetSessionByID(code)
-	if err != nil {
+	if err != nil || session.Granted {
 		errorResponse(rw, InvalidGrant, fmt.Sprintf("Invalid code: %s", code),
 			http.StatusUnauthorized)
 		return nil, false
 	}
+	session.Granted = true
 
 	return session, true
 }
