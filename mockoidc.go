@@ -171,9 +171,17 @@ func (m *MockOIDC) Now() time.Time {
 	return NowFunc().Add(m.fastForward)
 }
 
-// Synchronize sets the jwt.TimeFunc to our mutated view of time
-func (m *MockOIDC) Synchronize() {
+// TimeReset is a function that resets time
+type TimeReset func()
+
+// Synchronize sets the jwt.TimeFunc to our mutated view of time.
+// It returns a func that can reset it to its original state.
+func (m *MockOIDC) Synchronize() TimeReset {
+	original := jwt.TimeFunc
+
 	jwt.TimeFunc = m.Now
+
+	return func() { jwt.TimeFunc = original }
 }
 
 func (m *MockOIDC) Addr() string {
