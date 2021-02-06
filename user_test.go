@@ -135,6 +135,12 @@ func TestMockUser_Claims(t *testing.T) {
 			assert.True(t, ok)
 			assert.NotNil(t, claims)
 
+			if tc.Nonce == "" {
+				assert.Nil(t, data["nonce"])
+			} else {
+				assert.Equal(t, tc.Nonce, data["nonce"])
+			}
+
 			if tc.ExpectedEmail == "" {
 				assert.Nil(t, data["email"])
 			} else {
