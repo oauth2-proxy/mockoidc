@@ -132,7 +132,6 @@ type tokenResponse struct {
 // during the `authorization_endpoint` request (persisted across requests via
 // the `code`).
 // Reference: https://www.oauth.com/oauth2-servers/access-tokens/access-token-response/
-// TODO (@NickMeves): Handle Token Refresh
 func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
