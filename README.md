@@ -179,3 +179,23 @@ type MockOIDC struct {
 	UserQueue    *UserQueue
 }
 ```
+
+#### Adding Middleware
+
+When configuring the MockOIDC server manually, you have the opportunity to add
+custom middleware before starting the server (e.g. request logging, test
+validators, etc).
+
+```
+m, _ := mockoidc.NewServer(nil)
+
+middleware := func(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+        // custom middleware logic here...
+        next.ServeHTTP(rw, req)
+        // custom middleware logic here...
+    })
+}
+
+m.AddMiddleware(middleware)
+```

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/oauth2-proxy/mockoidc/v1"
@@ -231,4 +233,82 @@ func TestRun(t *testing.T) {
 	resp, err = httpClient.Do(refreshReq2)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestMockOIDC_Config(t *testing.T) {
+	m, err := mockoidc.Run()
+	assert.NoError(t, err)
+	defer m.Shutdown()
+
+	cfg := m.Config()
+	assert.Equal(t, m.ClientID, cfg.ClientID)
+	assert.Equal(t, m.ClientSecret, cfg.ClientSecret)
+	assert.Equal(t, m.Issuer(), cfg.Issuer)
+	assert.Equal(t, m.AccessTTL, cfg.AccessTTL)
+	assert.Equal(t, m.RefreshTTL, cfg.RefreshTTL)
+}
+
+func TestMockOIDC_AddMiddleware(t *testing.T) {
+	before := 0
+	after := 0
+	flagger := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			before = before + 1
+			next.ServeHTTP(rw, req)
+			after = after + 1
+		})
+	}
+
+	m, err := mockoidc.NewServer(nil)
+	assert.NoError(t, err)
+
+	const chains = 5
+	for i := 0; i < chains; i++ {
+		err = m.AddMiddleware(flagger)
+		assert.NoError(t, err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	assert.NoError(t, err)
+
+	err = m.Start(ln, nil)
+	assert.NoError(t, err)
+	defer m.Shutdown()
+
+	// middleware not run
+	assert.Equal(t, 0, before)
+	assert.Equal(t, 0, after)
+
+	req, err := http.NewRequest(http.MethodGet, m.DiscoveryEndpoint(), nil)
+	assert.NoError(t, err)
+	_, err = httpClient.Do(req)
+	assert.NoError(t, err)
+
+	// middleware run around the request
+	assert.Equal(t, chains, before)
+	assert.Equal(t, chains, after)
+
+	// no new middleware allowed after starting
+	err = m.AddMiddleware(flagger)
+	assert.Error(t, err)
+}
+
+func TestMockOIDC_FastForward(t *testing.T) {
+	testNow := time.Unix(1234567890, 0)
+	mockoidc.NowFunc = func() time.Time {
+		return testNow
+	}
+	defer func() {
+		mockoidc.NowFunc = time.Now
+	}()
+
+	m := &mockoidc.MockOIDC{}
+
+	ff1 := m.FastForward(time.Duration(123))
+	assert.Equal(t, time.Duration(123), ff1)
+	assert.Equal(t, testNow.Add(time.Duration(123)), m.Now())
+
+	ff2 := m.FastForward(time.Duration(456))
+	assert.Equal(t, time.Duration(579), ff2)
+	assert.Equal(t, testNow.Add(time.Duration(579)), m.Now())
 }

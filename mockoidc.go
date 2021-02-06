@@ -34,6 +34,7 @@ type MockOIDC struct {
 	UserQueue    *UserQueue
 
 	tlsConfig   *tls.Config
+	middleware  []func(http.Handler) http.Handler
 	fastForward time.Duration
 }
 
@@ -103,11 +104,11 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	}
 
 	handler := http.NewServeMux()
-	handler.HandleFunc(AuthorizationEndpoint, m.Authorize)
-	handler.HandleFunc(TokenEndpoint, m.Token)
-	handler.HandleFunc(UserinfoEndpoint, m.Userinfo)
-	handler.HandleFunc(JWKSEndpoint, m.JWKS)
-	handler.HandleFunc(DiscoveryEndpoint, m.JWKS)
+	handler.Handle(AuthorizationEndpoint, m.chainMiddleware(m.Authorize))
+	handler.Handle(TokenEndpoint, m.chainMiddleware(m.Token))
+	handler.Handle(UserinfoEndpoint, m.chainMiddleware(m.Userinfo))
+	handler.Handle(JWKSEndpoint, m.chainMiddleware(m.JWKS))
+	handler.Handle(DiscoveryEndpoint, m.chainMiddleware(m.JWKS))
 
 	m.Server = &http.Server{
 		Addr:      ln.Addr().String(),
@@ -130,6 +131,15 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 // Shutdown stops the MockOIDC server. Use this to cleanup test runs.
 func (m *MockOIDC) Shutdown() error {
 	return m.Server.Shutdown(context.Background())
+}
+
+func (m *MockOIDC) AddMiddleware(mw func(http.Handler) http.Handler) error {
+	if m.Server != nil {
+		return errors.New("server already started")
+	}
+
+	m.middleware = append(m.middleware, mw)
+	return nil
 }
 
 // Config returns the Config with options a connection application or unit
@@ -242,4 +252,14 @@ func (m *MockOIDC) JWKSEndpoint() string {
 		return ""
 	}
 	return m.Addr() + JWKSEndpoint
+}
+
+func (m *MockOIDC) chainMiddleware(endpoint func(http.ResponseWriter, *http.Request)) http.Handler {
+	var chain http.Handler
+	chain = http.HandlerFunc(endpoint)
+	for i := len(m.middleware) - 1; i >= 0; i-- {
+		mw := m.middleware[i]
+		chain = mw(chain)
+	}
+	return chain
 }
