@@ -24,10 +24,11 @@ const (
 	InvalidClient        = "invalid_client"
 	InvalidGrant         = "invalid_grant"
 	UnsupportedGrantType = "unsupported_grant_type"
-	//InvalidScope       = "invalid_scope"
+	InvalidScope         = "invalid_scope"
 	//UnauthorizedClient = "unauthorized_client"
 
 	applicationJSON = "application/json"
+	openidScope     = "openid"
 )
 
 var (
@@ -83,6 +84,9 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if !validateScope(rw, req) {
+		return
+	}
 	validClient := assertEqual("client_id", m.ClientID,
 		InvalidClient, "Invalid client id", rw, req)
 	if !validClient {
@@ -163,13 +167,12 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	refresh := grantType == "refresh_token"
 	tr := &tokenResponse{
 		RefreshToken: req.Form.Get("refresh_token"),
 		TokenType:    "bearer",
 		ExpiresIn:    m.AccessTTL,
 	}
-	err = m.setTokens(tr, session, refresh)
+	err = m.setTokens(tr, session, grantType)
 	if err != nil {
 		internalServerError(rw, err.Error())
 		return
@@ -251,23 +254,23 @@ func (m *MockOIDC) validateRefreshGrant(rw http.ResponseWriter, req *http.Reques
 	return session, true
 }
 
-func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session, refresh bool) error {
+func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session, grantType string) error {
 	var err error
 	tr.AccessToken, err = s.AccessToken(m.Config(), m.Keypair, m.Now())
 	if err != nil {
 		return err
 	}
-	tr.IDToken, err = s.IDToken(m.Config(), m.Keypair, m.Now())
-	if err != nil {
-		return err
+	if len(s.Scopes) > 0 && s.Scopes[0] == openidScope {
+		tr.IDToken, err = s.IDToken(m.Config(), m.Keypair, m.Now())
+		if err != nil {
+			return err
+		}
 	}
-
-	if refresh {
-		return nil
-	}
-	tr.RefreshToken, err = s.RefreshToken(m.Config(), m.Keypair, m.Now())
-	if err != nil {
-		return err
+	if grantType != "refresh_token" {
+		tr.RefreshToken, err = s.RefreshToken(m.Config(), m.Keypair, m.Now())
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -351,8 +354,8 @@ func (m *MockOIDC) JWKS(rw http.ResponseWriter, _ *http.Request) {
 }
 
 func (m *MockOIDC) authorizeBearer(rw http.ResponseWriter, req *http.Request) (*jwt.Token, bool) {
-	authz := req.Header.Get("Authorization")
-	parts := strings.Split(authz, " ")
+	header := req.Header.Get("Authorization")
+	parts := strings.SplitN(header, " ", 2)
 	if len(parts) < 2 || parts[0] != "Bearer" {
 		errorResponse(rw, InvalidRequest, "Invalid authorization header",
 			http.StatusUnauthorized)
@@ -408,6 +411,23 @@ func assertEqual(param, value, errorType, errorMsg string, rw http.ResponseWrite
 		errorResponse(rw, errorType, fmt.Sprintf("%s: %s", errorMsg, formValue),
 			http.StatusUnauthorized)
 		return false
+	}
+	return true
+}
+
+func validateScope(rw http.ResponseWriter, req *http.Request) bool {
+	allowed := make(map[string]struct{})
+	for _, scope := range ScopesSupported {
+		allowed[scope] = struct{}{}
+	}
+
+	scopes := strings.Split(req.Form.Get("scope"), " ")
+	for _, scope := range scopes {
+		if _, ok := allowed[scope]; !ok {
+			errorResponse(rw, InvalidScope, fmt.Sprintf("Unsupported scope: %s", scope),
+				http.StatusBadRequest)
+			return false
+		}
 	}
 	return true
 }
