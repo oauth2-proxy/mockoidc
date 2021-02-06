@@ -62,7 +62,7 @@ func TestSession_AccessToken(t *testing.T) {
 	assert.Equal(t, dummySession.SessionID, claims["jti"])
 	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
 	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
-	assert.Equal(t, dummySession.User.ID, claims["sub"])
+	assert.Equal(t, dummySession.User.ID(), claims["sub"])
 }
 
 func TestSession_RefreshToken(t *testing.T) {
@@ -81,7 +81,7 @@ func TestSession_RefreshToken(t *testing.T) {
 	assert.Equal(t, dummySession.SessionID, claims["jti"])
 	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
 	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
-	assert.Equal(t, dummySession.User.ID, claims["sub"])
+	assert.Equal(t, dummySession.User.ID(), claims["sub"])
 }
 
 func TestSession_IDToken(t *testing.T) {
@@ -100,9 +100,9 @@ func TestSession_IDToken(t *testing.T) {
 	assert.Equal(t, dummySession.SessionID, claims["jti"])
 	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
 	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
-	assert.Equal(t, dummySession.User.ID, claims["sub"])
+	assert.Equal(t, dummySession.User.ID(), claims["sub"])
 
-	u := dummySession.User
+	u := dummySession.User.(*mockoidc.MockUser)
 	assert.Equal(t, u.PreferredUsername, claims["preferred_username"])
 	assert.Equal(t, u.Address, claims["address"])
 	assert.Equal(t, u.Phone, claims["phone_number"])
@@ -123,8 +123,8 @@ func TestSessionStore_GetSessionByID(t *testing.T) {
 	_, err := ss.NewSession(scope, oidcNonce, user)
 	assert.NoError(t, err)
 
-	user2 := &mockoidc.User{
-		ID:                "DifferentUserId",
+	user2 := &mockoidc.MockUser{
+		Subject:           "DifferentUserId",
 		Email:             "different.user@example.com",
 		Phone:             "555-555-5555",
 		PreferredUsername: "Jon Diff",
@@ -155,8 +155,8 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 	_, err := ss.NewSession(scope, oidcNonce, user)
 	assert.NoError(t, err)
 
-	user2 := &mockoidc.User{
-		ID:                "DifferentUserId",
+	user2 := &mockoidc.MockUser{
+		Subject:           "DifferentUserId",
 		Email:             "different.user@example.com",
 		Phone:             "555-555-5555",
 		PreferredUsername: "Jon Diff",
