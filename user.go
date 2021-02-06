@@ -50,7 +50,7 @@ func DefaultUser() *MockUser {
 type mockUserinfo struct {
 	Email             string   `json:"email,omitempty"`
 	PreferredUsername string   `json:"preferred_username,omitempty"`
-	Phone             string   `json:"phone,omitempty"`
+	Phone             string   `json:"phone_number,omitempty"`
 	Address           string   `json:"address,omitempty"`
 	Groups            []string `json:"groups,omitempty"`
 }
