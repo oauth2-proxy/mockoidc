@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const TestNow = 1234567890
+
 // A custom client that doesn't automatically follow redirects
 var httpClient = &http.Client{
 	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -24,6 +26,9 @@ var httpClient = &http.Client{
 }
 
 func TestRun(t *testing.T) {
+	setTime()
+	defer resetTime()
+
 	m, err := mockoidc.Run()
 	assert.NoError(t, err)
 	defer m.Shutdown()
@@ -276,21 +281,30 @@ func TestMockOIDC_AddMiddleware(t *testing.T) {
 }
 
 func TestMockOIDC_FastForward(t *testing.T) {
-	testNow := time.Unix(1234567890, 0)
-	mockoidc.NowFunc = func() time.Time {
-		return testNow
-	}
-	defer func() {
-		mockoidc.NowFunc = time.Now
-	}()
+	setTime()
+	defer resetTime()
 
 	m := &mockoidc.MockOIDC{}
 
 	ff1 := m.FastForward(time.Duration(123))
 	assert.Equal(t, time.Duration(123), ff1)
-	assert.Equal(t, testNow.Add(time.Duration(123)), m.Now())
+	assert.Equal(t, mockoidc.NowFunc().Add(time.Duration(123)), m.Now())
 
 	ff2 := m.FastForward(time.Duration(456))
 	assert.Equal(t, time.Duration(579), ff2)
-	assert.Equal(t, testNow.Add(time.Duration(579)), m.Now())
+	assert.Equal(t, mockoidc.NowFunc().Add(time.Duration(579)), m.Now())
+}
+
+func setTime() {
+	mockoidc.NowFunc = func() time.Time {
+		return time.Unix(TestNow, 0)
+	}
+	jwt.TimeFunc = func() time.Time {
+		return time.Unix(TestNow, 0)
+	}
+}
+
+func resetTime() {
+	mockoidc.NowFunc = time.Now
+	jwt.TimeFunc = time.Now
 }
