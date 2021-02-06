@@ -287,7 +287,7 @@ func (m *MockOIDC) Userinfo(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp, err := session.User.userinfo(session.Scopes)
+	resp, err := session.User.Userinfo(session.Scopes)
 	if err != nil {
 		internalServerError(rw, err.Error())
 		return

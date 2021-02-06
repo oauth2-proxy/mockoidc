@@ -6,7 +6,7 @@ import "sync"
 // call to the authorize endpoint
 type UserQueue struct {
 	sync.Mutex
-	Queue []*User
+	Queue []User
 }
 
 // CodeQueue manages the queue of codes returned for each
@@ -18,14 +18,14 @@ type CodeQueue struct {
 
 // Push adds a User to the Queue to be set in subsequent calls to the
 // `authorization_endpoint`
-func (q *UserQueue) Push(user *User) {
+func (q *UserQueue) Push(user User) {
 	q.Lock()
 	defer q.Unlock()
 	q.Queue = append(q.Queue, user)
 }
 
 // Pop a User from the Queue. If empty, return `DefaultUser()`
-func (q *UserQueue) Pop() *User {
+func (q *UserQueue) Pop() User {
 	q.Lock()
 	defer q.Unlock()
 
@@ -33,7 +33,7 @@ func (q *UserQueue) Pop() *User {
 		return DefaultUser()
 	}
 
-	var user *User
+	var user User
 	user, q.Queue = q.Queue[0], q.Queue[1:]
 	return user
 }

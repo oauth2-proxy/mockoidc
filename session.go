@@ -13,7 +13,7 @@ type Session struct {
 	SessionID string
 	Scopes    []string
 	OIDCNonce string
-	User      *User
+	User      User
 	Granted   bool
 }
 
@@ -21,6 +21,13 @@ type Session struct {
 type SessionStore struct {
 	Store     map[string]*Session
 	CodeQueue *CodeQueue
+}
+
+// IDTokenClaims are the mandatory claims any User.Claims implementation
+// should use in their jwt.Claims building.
+type IDTokenClaims struct {
+	Nonce string `json:"nonce,omitempty"`
+	*jwt.StandardClaims
 }
 
 // NewSessionStore initializes the SessionStore for this server
@@ -32,7 +39,7 @@ func NewSessionStore() *SessionStore {
 }
 
 // NewSession creates a new Session for a User
-func (ss *SessionStore) NewSession(scope string, nonce string, user *User) (*Session, error) {
+func (ss *SessionStore) NewSession(scope string, nonce string, user User) (*Session, error) {
 	sessionID, err := ss.CodeQueue.Pop()
 	if err != nil {
 		return nil, err
@@ -84,6 +91,21 @@ func (s *Session) RefreshToken(config *Config, kp *Keypair, now time.Time) (stri
 	return kp.SignJWT(claims)
 }
 
+// IDToken returns the JWT token with the appropriate claims for a user
+// based on the scopes set.
+func (s *Session) IDToken(config *Config, kp *Keypair, now time.Time) (string, error) {
+	base := &IDTokenClaims{
+		StandardClaims: s.standardClaims(config, config.AccessTTL, now),
+		Nonce:          s.OIDCNonce,
+	}
+	claims, err := s.User.Claims(s.Scopes, base)
+	if err != nil {
+		return "", err
+	}
+
+	return kp.SignJWT(claims)
+}
+
 func (s *Session) standardClaims(config *Config, ttl time.Duration, now time.Time) *jwt.StandardClaims {
 	return &jwt.StandardClaims{
 		Audience:  config.ClientID,
@@ -92,29 +114,6 @@ func (s *Session) standardClaims(config *Config, ttl time.Duration, now time.Tim
 		IssuedAt:  now.Unix(),
 		Issuer:    config.Issuer,
 		NotBefore: now.Unix(),
-		Subject:   s.User.ID,
+		Subject:   s.User.ID(),
 	}
-}
-
-type idTokenClaims struct {
-	PreferredUsername string   `json:"preferred_username,omitempty"`
-	Email             string   `json:"email,omitempty"`
-	Phone             string   `json:"phone_number,omitempty"`
-	Address           string   `json:"address,omitempty"`
-	Groups            []string `json:"groups,omitempty"`
-	EmailVerified     bool     `json:"email_verified,omitempty"`
-	Nonce             string   `json:"nonce,omitempty"`
-	jwt.StandardClaims
-}
-
-// IDToken returns the JWT token with the appropriate claims for a user
-// based on the scopes set.
-func (s *Session) IDToken(config *Config, kp *Keypair, now time.Time) (string, error) {
-	idClaims := &idTokenClaims{
-		Nonce:          s.OIDCNonce,
-		StandardClaims: *s.standardClaims(config, config.AccessTTL, now),
-	}
-	s.User.populateClaims(s.Scopes, idClaims)
-
-	return kp.SignJWT(idClaims)
 }
