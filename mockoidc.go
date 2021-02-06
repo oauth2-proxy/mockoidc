@@ -157,7 +157,7 @@ func (m *MockOIDC) Config() *Config {
 // QueueUser allows adding mock User objects to the authentication queue.
 // Calls to the `authorization_endpoint` will pop these mock User objects
 // off the queue and create a session with them.
-func (m *MockOIDC) QueueUser(user *User) {
+func (m *MockOIDC) QueueUser(user User) {
 	m.UserQueue.Push(user)
 }
 
@@ -214,7 +214,7 @@ func (m *MockOIDC) Issuer() string {
 	return m.Addr() + IssuerBase
 }
 
-// DiscoveryEndpoint returns the full `/.well-known/openid-configurtion` URL
+// DiscoveryEndpoint returns the full `/.well-known/openid-configuration` URL
 func (m *MockOIDC) DiscoveryEndpoint() string {
 	if m.Server == nil {
 		return ""
