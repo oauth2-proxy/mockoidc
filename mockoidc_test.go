@@ -87,20 +87,14 @@ func TestRun(t *testing.T) {
 	// ************************************************************************
 	// Stage 2: Emulate appRedirect handling token endpoint call
 	// ************************************************************************
-	tokenQuery := url.Values{}
-	tokenQuery.Set("grant_type", "authorization_code")
-	tokenQuery.Set("code", code)
-
 	tokenForm := url.Values{}
 	tokenForm.Set("client_id", config.ClientID)
 	tokenForm.Set("client_secret", config.ClientSecret)
-
-	tokenURL, err := url.Parse(m.TokenEndpoint())
-	assert.NoError(t, err)
-	tokenURL.RawQuery = tokenQuery.Encode()
+	tokenForm.Set("grant_type", "authorization_code")
+	tokenForm.Set("code", appRedirect.Query().Get("code"))
 
 	tokenReq, err := http.NewRequest(
-		http.MethodPost, tokenURL.String(), bytes.NewBufferString(tokenForm.Encode()))
+		http.MethodPost, m.TokenEndpoint(), bytes.NewBufferString(tokenForm.Encode()))
 	assert.NoError(t, err)
 	tokenReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
@@ -155,20 +149,14 @@ func TestRun(t *testing.T) {
 	// ************************************************************************
 	// Stage 5: We can refresh them
 	// ************************************************************************
-	refreshQuery := url.Values{}
-	refreshQuery.Set("grant_type", "refresh_token")
-	refreshQuery.Set("refresh_token", tokens["refresh_token"].(string))
-
 	refreshForm := url.Values{}
 	refreshForm.Set("client_id", config.ClientID)
 	refreshForm.Set("client_secret", config.ClientSecret)
-
-	refreshURL, err := url.Parse(m.TokenEndpoint())
-	assert.NoError(t, err)
-	refreshURL.RawQuery = refreshQuery.Encode()
+	refreshForm.Set("grant_type", "refresh_token")
+	refreshForm.Set("refresh_token", tokens["refresh_token"].(string))
 
 	refreshReq, err := http.NewRequest(
-		http.MethodPost, refreshURL.String(), bytes.NewBufferString(refreshForm.Encode()))
+		http.MethodPost, m.TokenEndpoint(), bytes.NewBufferString(refreshForm.Encode()))
 	assert.NoError(t, err)
 	refreshReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
@@ -213,20 +201,14 @@ func TestRun(t *testing.T) {
 	// ************************************************************************
 	m.FastForward(config.RefreshTTL)
 
-	refreshQuery2 := url.Values{}
-	refreshQuery2.Set("grant_type", "refresh_token")
-	refreshQuery2.Set("refresh_token", tokens["refresh_token"].(string))
-
 	refreshForm2 := url.Values{}
 	refreshForm2.Set("client_id", config.ClientID)
 	refreshForm2.Set("client_secret", config.ClientSecret)
-
-	refreshURL2, err := url.Parse(m.TokenEndpoint())
-	assert.NoError(t, err)
-	refreshURL2.RawQuery = refreshQuery2.Encode()
+	refreshForm2.Set("grant_type", "refresh_token")
+	refreshForm2.Set("refresh_token", tokens["refresh_token"].(string))
 
 	refreshReq2, err := http.NewRequest(
-		http.MethodPost, refreshURL2.String(), bytes.NewBufferString(tokenForm.Encode()))
+		http.MethodPost, m.TokenEndpoint(), bytes.NewBufferString(tokenForm.Encode()))
 	assert.NoError(t, err)
 	refreshReq2.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
