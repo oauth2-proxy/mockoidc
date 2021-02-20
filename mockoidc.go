@@ -32,6 +32,7 @@ type MockOIDC struct {
 	Keypair      *Keypair
 	SessionStore *SessionStore
 	UserQueue    *UserQueue
+	ErrorQueue   *ErrorQueue
 
 	tlsConfig   *tls.Config
 	middleware  []func(http.Handler) http.Handler
@@ -74,6 +75,7 @@ func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 		Keypair:      keypair,
 		SessionStore: NewSessionStore(),
 		UserQueue:    &UserQueue{},
+		ErrorQueue:   &ErrorQueue{},
 	}, nil
 }
 
@@ -108,7 +110,7 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	handler.Handle(TokenEndpoint, m.chainMiddleware(m.Token))
 	handler.Handle(UserinfoEndpoint, m.chainMiddleware(m.Userinfo))
 	handler.Handle(JWKSEndpoint, m.chainMiddleware(m.JWKS))
-	handler.Handle(DiscoveryEndpoint, m.chainMiddleware(m.JWKS))
+	handler.Handle(DiscoveryEndpoint, m.chainMiddleware(m.Discovery))
 
 	m.Server = &http.Server{
 		Addr:      ln.Addr().String(),
@@ -167,6 +169,12 @@ func (m *MockOIDC) QueueUser(user User) {
 // code parameter in the response.
 func (m *MockOIDC) QueueCode(code string) {
 	m.SessionStore.CodeQueue.Push(code)
+}
+
+// QueueError allows queueing arbitrary errors for the next handler calls
+// to return.
+func (m *MockOIDC) QueueError(se *ServerError) {
+	m.ErrorQueue.Push(se)
 }
 
 // FastForward moves the MockOIDC's internal view of time forward.
@@ -255,11 +263,20 @@ func (m *MockOIDC) JWKSEndpoint() string {
 }
 
 func (m *MockOIDC) chainMiddleware(endpoint func(http.ResponseWriter, *http.Request)) http.Handler {
-	var chain http.Handler
-	chain = http.HandlerFunc(endpoint)
+	chain := m.forceError(http.HandlerFunc(endpoint))
 	for i := len(m.middleware) - 1; i >= 0; i-- {
 		mw := m.middleware[i]
 		chain = mw(chain)
 	}
 	return chain
+}
+
+func (m *MockOIDC) forceError(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if se := m.ErrorQueue.Pop(); se != nil {
+			errorResponse(rw, se.Error, se.Description, se.Code)
+		} else {
+			next.ServeHTTP(rw, req)
+		}
+	})
 }

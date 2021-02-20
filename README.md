@@ -97,6 +97,22 @@ m.QueueCode("12345")
 // ...Request to m.AuthorizationEndpoint()
 ```
 
+### Forcing Errors
+
+Arbitrary errors can also be queued for handlers to return instead of their
+default behavior:
+
+```
+m, err := mockoidc.Run()
+defer m.Shutdown()
+
+m.QueueError(&mockoidc.ServerError{
+    Code: http.StatusInternalServerError,
+    Error: mockoidc.InternalServerError,
+    Description: "Some Custom Description",
+})
+```
+
 ### Manipulating Time
 
 To accurately test token expiration scenarios, the MockOIDC server's view of
@@ -177,6 +193,7 @@ type MockOIDC struct {
 	Keypair      *Keypair
 	SessionStore *SessionStore
 	UserQueue    *UserQueue
+	ErrorQueue   *ErrorQueue
 }
 ```
 
