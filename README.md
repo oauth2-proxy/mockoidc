@@ -14,7 +14,7 @@ Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium
 
 Import the package
 ```
-import "github.com/oauth2-proxy/mockoidc/v1"
+import "github.com/oauth2-proxy/mockoidc"
 ```
 
 Start the MockOIDC Server. This will spin up a minimal OIDC server in its own
