@@ -26,6 +26,7 @@ const (
 	UnsupportedGrantType = "unsupported_grant_type"
 	InvalidScope         = "invalid_scope"
 	//UnauthorizedClient = "unauthorized_client"
+	InternalServerError = "internal_server_error"
 
 	applicationJSON = "application/json"
 	openidScope     = "openid"
@@ -453,7 +454,7 @@ func errorResponse(rw http.ResponseWriter, error, description string, statusCode
 }
 
 func internalServerError(rw http.ResponseWriter, errorMsg string) {
-	errorResponse(rw, "internal_server_error", errorMsg, http.StatusInternalServerError)
+	errorResponse(rw, InternalServerError, errorMsg, http.StatusInternalServerError)
 }
 
 func jsonResponse(rw http.ResponseWriter, data []byte) {

@@ -235,6 +235,65 @@ func TestMockOIDC_Config(t *testing.T) {
 	assert.Equal(t, m.RefreshTTL, cfg.RefreshTTL)
 }
 
+func TestMockOIDC_QueueError(t *testing.T) {
+	m, err := mockoidc.Run()
+	assert.NoError(t, err)
+	defer m.Shutdown()
+
+	type handlerError struct {
+		Error       string `json:"error"`
+		Description string `json:"error_description"`
+	}
+
+	m.QueueError(&mockoidc.ServerError{
+		Code:        http.StatusInternalServerError,
+		Error:       mockoidc.InternalServerError,
+		Description: "Discovery Error",
+	})
+
+	m.QueueError(&mockoidc.ServerError{
+		Code:        http.StatusBadRequest,
+		Error:       mockoidc.InvalidRequest,
+		Description: "Authorize Error",
+	})
+
+	// First Queued Error
+	discoveryReq, err := http.NewRequest(http.MethodGet, m.DiscoveryEndpoint(), nil)
+	assert.NoError(t, err)
+
+	resp, err := httpClient.Do(discoveryReq)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	var discoveryResp handlerError
+	err = json.NewDecoder(resp.Body).Decode(&discoveryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, "Discovery Error", discoveryResp.Description)
+
+	// Second Queued Error
+	authorizeReq, err := http.NewRequest(http.MethodGet, m.AuthorizationEndpoint(), nil)
+	assert.NoError(t, err)
+
+	resp, err = httpClient.Do(authorizeReq)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	var authorizeResp handlerError
+	err = json.NewDecoder(resp.Body).Decode(&authorizeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, "Authorize Error", authorizeResp.Description)
+
+	// No Errors Queued
+	jwksReq, err := http.NewRequest(http.MethodGet, m.JWKSEndpoint(), nil)
+	assert.NoError(t, err)
+
+	resp, err = httpClient.Do(jwksReq)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
 func TestMockOIDC_AddMiddleware(t *testing.T) {
 	before := 0
 	after := 0
