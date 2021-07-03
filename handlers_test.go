@@ -198,10 +198,10 @@ func TestMockOIDC_Discovery(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, oidcCfg["issuer"], m.Issuer())
-	assert.Equal(t, oidcCfg["authorization_endpoint"], m.Issuer()+mockoidc.AuthorizationEndpoint)
-	assert.Equal(t, oidcCfg["token_endpoint"], m.Issuer()+mockoidc.TokenEndpoint)
-	assert.Equal(t, oidcCfg["userinfo_endpoint"], m.Issuer()+mockoidc.UserinfoEndpoint)
-	assert.Equal(t, oidcCfg["jwks_uri"], m.Issuer()+mockoidc.JWKSEndpoint)
+	assert.Equal(t, oidcCfg["authorization_endpoint"], m.AuthorizationEndpoint())
+	assert.Equal(t, oidcCfg["token_endpoint"], m.TokenEndpoint())
+	assert.Equal(t, oidcCfg["userinfo_endpoint"], m.UserinfoEndpoint())
+	assert.Equal(t, oidcCfg["jwks_uri"], m.JWKSEndpoint())
 }
 
 func getJSON(res *httptest.ResponseRecorder, target interface{}) error {

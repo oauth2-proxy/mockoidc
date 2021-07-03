@@ -320,10 +320,10 @@ type discoveryResponse struct {
 func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
 	discovery := &discoveryResponse{
 		Issuer:                m.Issuer(),
-		AuthorizationEndpoint: m.Issuer() + AuthorizationEndpoint,
-		TokenEndpoint:         m.Issuer() + TokenEndpoint,
-		JWKSUri:               m.Issuer() + JWKSEndpoint,
-		UserinfoEndpoint:      m.Issuer() + UserinfoEndpoint,
+		AuthorizationEndpoint: m.AuthorizationEndpoint(),
+		TokenEndpoint:         m.TokenEndpoint(),
+		JWKSUri:               m.JWKSEndpoint(),
+		UserinfoEndpoint:      m.UserinfoEndpoint(),
 
 		GrantTypesSupported:               GrantTypesSupported,
 		ResponseTypesSupported:            ResponseTypesSupported,
