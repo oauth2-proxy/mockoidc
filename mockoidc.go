@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 )
 
 // NowFunc is an overrideable version of `time.Now`. Tests that need to
