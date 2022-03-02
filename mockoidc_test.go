@@ -72,6 +72,12 @@ func TestRun(t *testing.T) {
 	authorizeQuery.Set("state", state)
 	authorizeQuery.Set("nonce", nonce)
 
+	codeVerifier := "sum"
+	challenge, err := mockoidc.GenerateCodeChallenge(mockoidc.CodeChallengeMethodS256, codeVerifier)
+	assert.NoError(t, err)
+	authorizeQuery.Set("code_challenge", challenge)
+	authorizeQuery.Set("code_challenge_method", mockoidc.CodeChallengeMethodS256)
+
 	authorizeURL, err := url.Parse(m.AuthorizationEndpoint())
 	assert.NoError(t, err)
 	authorizeURL.RawQuery = authorizeQuery.Encode()
@@ -97,6 +103,7 @@ func TestRun(t *testing.T) {
 	tokenForm.Set("client_secret", config.ClientSecret)
 	tokenForm.Set("grant_type", "authorization_code")
 	tokenForm.Set("code", appRedirect.Query().Get("code"))
+	tokenForm.Set("code_verifier", codeVerifier)
 
 	tokenReq, err := http.NewRequest(
 		http.MethodPost, m.TokenEndpoint(), bytes.NewBufferString(tokenForm.Encode()))
@@ -233,6 +240,7 @@ func TestMockOIDC_Config(t *testing.T) {
 	assert.Equal(t, m.Issuer(), cfg.Issuer)
 	assert.Equal(t, m.AccessTTL, cfg.AccessTTL)
 	assert.Equal(t, m.RefreshTTL, cfg.RefreshTTL)
+	assert.Equal(t, m.CodeChallengeMethodsSupported, cfg.CodeChallengeMethodsSupported)
 }
 
 func TestMockOIDC_QueueError(t *testing.T) {

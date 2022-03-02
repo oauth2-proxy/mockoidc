@@ -26,6 +26,8 @@ type MockOIDC struct {
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
 
+	CodeChallengeMethodsSupported []string
+
 	// Normally, these would be private. Expose them publicly for
 	// power users.
 	Server       *http.Server
@@ -48,6 +50,8 @@ type Config struct {
 
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
+
+	CodeChallengeMethodsSupported []string
 }
 
 // NewServer configures a new MockOIDC that isn't started. An existing
@@ -68,14 +72,15 @@ func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 	}
 
 	return &MockOIDC{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		AccessTTL:    time.Duration(10) * time.Minute,
-		RefreshTTL:   time.Duration(60) * time.Minute,
-		Keypair:      keypair,
-		SessionStore: NewSessionStore(),
-		UserQueue:    &UserQueue{},
-		ErrorQueue:   &ErrorQueue{},
+		ClientID:                      clientID,
+		ClientSecret:                  clientSecret,
+		AccessTTL:                     time.Duration(10) * time.Minute,
+		RefreshTTL:                    time.Duration(60) * time.Minute,
+		CodeChallengeMethodsSupported: []string{"plain", "S256"},
+		Keypair:                       keypair,
+		SessionStore:                  NewSessionStore(),
+		UserQueue:                     &UserQueue{},
+		ErrorQueue:                    &ErrorQueue{},
 	}, nil
 }
 
@@ -148,11 +153,12 @@ func (m *MockOIDC) AddMiddleware(mw func(http.Handler) http.Handler) error {
 // tests need to be aware of.
 func (m *MockOIDC) Config() *Config {
 	return &Config{
-		ClientID:     m.ClientID,
-		ClientSecret: m.ClientSecret,
-		Issuer:       m.Issuer(),
-		AccessTTL:    m.AccessTTL,
-		RefreshTTL:   m.RefreshTTL,
+		ClientID:                      m.ClientID,
+		ClientSecret:                  m.ClientSecret,
+		Issuer:                        m.Issuer(),
+		CodeChallengeMethodsSupported: m.CodeChallengeMethodsSupported,
+		AccessTTL:                     m.AccessTTL,
+		RefreshTTL:                    m.RefreshTTL,
 	}
 }
 

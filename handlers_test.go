@@ -25,6 +25,8 @@ func TestMockOIDC_Authorize(t *testing.T) {
 	data.Set("redirect_uri", "example.com")
 	data.Set("state", "testState")
 	data.Set("client_id", m.ClientID)
+	data.Set("code_challenge", "somehash")
+	data.Set("code_challenge_method", "S256")
 	assert.HTTPError(t, m.Authorize, http.MethodGet, mockoidc.AuthorizationEndpoint, nil)
 
 	// valid request
@@ -38,8 +40,21 @@ func TestMockOIDC_Authorize(t *testing.T) {
 	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
 		mockoidc.AuthorizationEndpoint, data, mockoidc.InvalidClient)
 
+	// Bad code challenge method
+	data.Set("client_id", m.ClientID)
+	data.Set("code_challenge_method", "does not exist")
+	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
+		mockoidc.AuthorizationEndpoint, data, http.StatusBadRequest)
+	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
+		mockoidc.AuthorizationEndpoint, data, mockoidc.InvalidRequest)
+
 	// Missing required form values
 	for key := range data {
+		if key == "code_challenge" || key == "code_challenge_method" {
+			// Skip not required fields
+			continue
+		}
+
 		t.Run(key, func(t *testing.T) {
 			badData, _ := url.ParseQuery(data.Encode())
 			badData.Del(key)
@@ -57,7 +72,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	assert.NoError(t, err)
 
 	session, _ := m.SessionStore.NewSession(
-		"openid email profile", "nonce", mockoidc.DefaultUser())
+		"openid email profile", "nonce", mockoidc.DefaultUser(), "", "")
 
 	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
 
@@ -128,12 +143,62 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rrDup.Code)
 }
 
+func TestMockOIDC_Token_CodeGrant_CodeChallengeHash(t *testing.T) {
+	m, err := mockoidc.NewServer(nil)
+	assert.NoError(t, err)
+
+	codeChallenge, err := mockoidc.GenerateCodeChallenge(mockoidc.CodeChallengeMethodS256, "sum")
+	assert.NoError(t, err)
+	session, _ := m.SessionStore.NewSession(
+		"openid email profile", "nonce", mockoidc.DefaultUser(),
+		codeChallenge, mockoidc.CodeChallengeMethodS256)
+
+	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
+
+	data := url.Values{}
+	data.Set("client_id", m.ClientID)
+	data.Set("client_secret", m.ClientSecret)
+	data.Set("code", session.SessionID)
+	data.Set("grant_type", "authorization_code")
+	data.Set("code_verifier", "sum")
+
+	// good request; good response
+	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	tokenResp := make(map[string]interface{})
+	err = getJSON(rr, &tokenResp)
+	assert.NoError(t, err)
+
+	// bad request; no verifier provided
+	badData, _ := url.ParseQuery(data.Encode())
+	badData.Del("code_verifier")
+
+	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	body, err := ioutil.ReadAll(rr.Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), mockoidc.InvalidGrant)
+
+	// bad request; bad verifier provided
+	badData, _ = url.ParseQuery(data.Encode())
+	badData.Set("code_verifier", "WRONG")
+
+	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	body, err = ioutil.ReadAll(rr.Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), mockoidc.InvalidGrant)
+}
+
 func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
 	m, err := mockoidc.NewServer(nil)
 	assert.NoError(t, err)
 
 	session, _ := m.SessionStore.NewSession(
-		"openid email profile", "sessionNonce", mockoidc.DefaultUser())
+		"openid email profile", "sessionNonce", mockoidc.DefaultUser(), "", "")
 	refreshToken, _ := session.RefreshToken(m.Config(), m.Keypair, m.Now())
 
 	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
@@ -189,6 +254,7 @@ func TestMockOIDC_Discovery(t *testing.T) {
 		Server: &http.Server{
 			Addr: "127.0.0.1:8080",
 		},
+		CodeChallengeMethodsSupported: []string{"some_random_value"},
 	}
 	recorder := httptest.NewRecorder()
 	m.Discovery(recorder, &http.Request{})
@@ -202,6 +268,7 @@ func TestMockOIDC_Discovery(t *testing.T) {
 	assert.Equal(t, oidcCfg["token_endpoint"], m.TokenEndpoint())
 	assert.Equal(t, oidcCfg["userinfo_endpoint"], m.UserinfoEndpoint())
 	assert.Equal(t, oidcCfg["jwks_uri"], m.JWKSEndpoint())
+	assert.ElementsMatch(t, oidcCfg["code_challenge_methods_supported"], m.CodeChallengeMethodsSupported)
 }
 
 func getJSON(res *httptest.ResponseRecorder, target interface{}) error {
