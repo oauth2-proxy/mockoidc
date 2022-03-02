@@ -167,7 +167,7 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		if valid = m.validateCodeChallenge(rw, req, session); !valid {
+		if !m.validateCodeChallenge(rw, req, session) {
 			return
 		}
 	case "refresh_token":
