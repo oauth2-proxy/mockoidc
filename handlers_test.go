@@ -143,6 +143,56 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rrDup.Code)
 }
 
+func TestMockOIDC_Token_CodeGrant_CodeChallengePlain(t *testing.T) {
+	m, err := mockoidc.NewServer(nil)
+	assert.NoError(t, err)
+
+	codeChallenge, err := mockoidc.GenerateCodeChallenge(mockoidc.CodeChallengeMethodPlain, "sum")
+	assert.NoError(t, err)
+	session, _ := m.SessionStore.NewSession(
+		"openid email profile", "nonce", mockoidc.DefaultUser(),
+		codeChallenge, mockoidc.CodeChallengeMethodPlain)
+
+	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
+
+	data := url.Values{}
+	data.Set("client_id", m.ClientID)
+	data.Set("client_secret", m.ClientSecret)
+	data.Set("code", session.SessionID)
+	data.Set("grant_type", "authorization_code")
+	data.Set("code_verifier", "sum")
+
+	// good request; good response
+	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	tokenResp := make(map[string]interface{})
+	err = getJSON(rr, &tokenResp)
+	assert.NoError(t, err)
+
+	// bad request; no verifier provided
+	badData, _ := url.ParseQuery(data.Encode())
+	badData.Del("code_verifier")
+
+	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	body, err := ioutil.ReadAll(rr.Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), mockoidc.InvalidGrant)
+
+	// bad request; bad verifier provided
+	badData, _ = url.ParseQuery(data.Encode())
+	badData.Set("code_verifier", "WRONG")
+
+	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	body, err = ioutil.ReadAll(rr.Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), mockoidc.InvalidGrant)
+}
+
 func TestMockOIDC_Token_CodeGrant_CodeChallengeHash(t *testing.T) {
 	m, err := mockoidc.NewServer(nil)
 	assert.NoError(t, err)

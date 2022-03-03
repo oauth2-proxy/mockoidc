@@ -98,11 +98,8 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 	if !validType {
 		return
 	}
-	if req.Form.Get("code_challenge_method") != "" {
-		if !contains(req.Form.Get("code_challenge_method"), m.CodeChallengeMethodsSupported) {
-			errorResponse(rw, InvalidRequest, "Invalid code challenge method", http.StatusBadRequest)
-			return
-		}
+	if !validateCodeChallengeMethodSupported(rw, req.Form.Get("code_challenge_method"), m.CodeChallengeMethodsSupported) {
+		return
 	}
 
 	session, err := m.SessionStore.NewSession(
@@ -254,7 +251,7 @@ func (m *MockOIDC) validateCodeChallenge(rw http.ResponseWriter, req *http.Reque
 
 	challenge, err := GenerateCodeChallenge(session.CodeChallengeMethod, codeVerifier)
 	if err != nil {
-		errorResponse(rw, InvalidRequest, "Invalid code verifier. "+err.Error(), http.StatusUnauthorized)
+		errorResponse(rw, InvalidRequest, fmt.Sprintf("Invalid code verifier. %v", err.Error()), http.StatusUnauthorized)
 		return false
 	}
 
@@ -468,6 +465,14 @@ func validateScope(rw http.ResponseWriter, req *http.Request) bool {
 				http.StatusBadRequest)
 			return false
 		}
+	}
+	return true
+}
+
+func validateCodeChallengeMethodSupported(rw http.ResponseWriter, method string, supportedMethods []string) bool {
+	if method != "" && !contains(method, supportedMethods) {
+		errorResponse(rw, InvalidRequest, "Invalid code challenge method", http.StatusBadRequest)
+		return false
 	}
 	return true
 }
