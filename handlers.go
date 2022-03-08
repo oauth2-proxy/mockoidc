@@ -98,11 +98,16 @@ func (m *MockOIDC) Authorize(rw http.ResponseWriter, req *http.Request) {
 	if !validType {
 		return
 	}
+	if !validateCodeChallengeMethodSupported(rw, req.Form.Get("code_challenge_method"), m.CodeChallengeMethodsSupported) {
+		return
+	}
 
 	session, err := m.SessionStore.NewSession(
 		req.Form.Get("scope"),
 		req.Form.Get("nonce"),
 		m.UserQueue.Pop(),
+		req.Form.Get("code_challenge"),
+		req.Form.Get("code_challenge_method"),
 	)
 	if err != nil {
 		internalServerError(rw, err.Error())
@@ -156,6 +161,10 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 	switch grantType {
 	case "authorization_code":
 		if session, valid = m.validateCodeGrant(rw, req); !valid {
+			return
+		}
+
+		if !m.validateCodeChallenge(rw, req, session) {
 			return
 		}
 	case "refresh_token":
@@ -227,6 +236,31 @@ func (m *MockOIDC) validateCodeGrant(rw http.ResponseWriter, req *http.Request) 
 	session.Granted = true
 
 	return session, true
+}
+
+func (m *MockOIDC) validateCodeChallenge(rw http.ResponseWriter, req *http.Request, session *Session) bool {
+	if session.CodeChallenge == "" || session.CodeChallengeMethod == "" {
+		return true
+	}
+
+	codeVerifier := req.Form.Get("code_verifier")
+	if codeVerifier == "" {
+		errorResponse(rw, InvalidGrant, "Invalid code verifier. Expected code but client sent none.", http.StatusUnauthorized)
+		return false
+	}
+
+	challenge, err := GenerateCodeChallenge(session.CodeChallengeMethod, codeVerifier)
+	if err != nil {
+		errorResponse(rw, InvalidRequest, fmt.Sprintf("Invalid code verifier. %v", err.Error()), http.StatusUnauthorized)
+		return false
+	}
+
+	if challenge != session.CodeChallenge {
+		errorResponse(rw, InvalidGrant, "Invalid code verifier. Code challenge did not match hashed code verifier.", http.StatusUnauthorized)
+		return false
+	}
+
+	return true
 }
 
 func (m *MockOIDC) validateRefreshGrant(rw http.ResponseWriter, req *http.Request) (*Session, bool) {
@@ -313,10 +347,11 @@ type discoveryResponse struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 	ClaimsSupported                   []string `json:"claims_supported"`
+	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
 }
 
-// Discovery renders the OIDC discovery document hosted at
-// `/.well-known/openid-configuration`.
+// Discovery renders the OIDC discovery document and partial RFC-8414 authorization
+// server metadata hosted at `/.well-known/openid-configuration`.
 func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
 	discovery := &discoveryResponse{
 		Issuer:                m.Issuer(),
@@ -332,6 +367,7 @@ func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
 		ScopesSupported:                   ScopesSupported,
 		TokenEndpointAuthMethodsSupported: TokenEndpointAuthMethodsSupported,
 		ClaimsSupported:                   ClaimsSupported,
+		CodeChallengeMethodsSupported:     m.CodeChallengeMethodsSupported,
 	}
 
 	resp, err := json.Marshal(discovery)
@@ -433,6 +469,14 @@ func validateScope(rw http.ResponseWriter, req *http.Request) bool {
 	return true
 }
 
+func validateCodeChallengeMethodSupported(rw http.ResponseWriter, method string, supportedMethods []string) bool {
+	if method != "" && !contains(method, supportedMethods) {
+		errorResponse(rw, InvalidRequest, "Invalid code challenge method", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
 func errorResponse(rw http.ResponseWriter, error, description string, statusCode int) {
 	errJSON := map[string]string{
 		"error":             error,
@@ -471,4 +515,13 @@ func jsonResponse(rw http.ResponseWriter, data []byte) {
 func noCache(rw http.ResponseWriter) {
 	rw.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
 	rw.Header().Set("Pragma", "no-cache")
+}
+
+func contains(value string, list []string) bool {
+	for _, element := range list {
+		if element == value {
+			return true
+		}
+	}
+	return false
 }

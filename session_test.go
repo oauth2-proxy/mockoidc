@@ -38,12 +38,14 @@ func TestSessionStore_NewSession(t *testing.T) {
 	)
 	user := mockoidc.DefaultUser()
 
-	session, err := ss.NewSession(scope, oidcNonce, user)
+	session, err := ss.NewSession(scope, oidcNonce, user, "sum", "S256")
 
 	assert.NoError(t, err)
 	assert.Equal(t, session.Scopes, []string{"openid", "email", "profile"})
 	assert.Equal(t, len(ss.Store), 1)
 	assert.Equal(t, ss.Store[session.SessionID], session)
+	assert.Equal(t, session.CodeChallenge, "sum")
+	assert.Equal(t, session.CodeChallengeMethod, "S256")
 }
 
 func TestSession_AccessToken(t *testing.T) {
@@ -120,7 +122,7 @@ func TestSessionStore_GetSessionByID(t *testing.T) {
 		oidcNonce = "nonce"
 	)
 	user := mockoidc.DefaultUser()
-	_, err := ss.NewSession(scope, oidcNonce, user)
+	_, err := ss.NewSession(scope, oidcNonce, user, "sum", "S256")
 	assert.NoError(t, err)
 
 	user2 := &mockoidc.MockUser{
@@ -132,7 +134,7 @@ func TestSessionStore_GetSessionByID(t *testing.T) {
 		Groups:            []string{"another", "different"},
 		EmailVerified:     true,
 	}
-	s2, err := ss.NewSession(scope, oidcNonce, user2)
+	s2, err := ss.NewSession(scope, oidcNonce, user2, "", "")
 	assert.NoError(t, err)
 
 	session, err := ss.GetSessionByID(s2.SessionID)
@@ -152,7 +154,7 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 		oidcNonce = "nonce"
 	)
 	user := mockoidc.DefaultUser()
-	_, err := ss.NewSession(scope, oidcNonce, user)
+	_, err := ss.NewSession(scope, oidcNonce, user, "sum", "S256")
 	assert.NoError(t, err)
 
 	user2 := &mockoidc.MockUser{
@@ -164,7 +166,7 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 		Groups:            []string{"another", "different"},
 		EmailVerified:     true,
 	}
-	s2, err := ss.NewSession(scope, oidcNonce, user2)
+	s2, err := ss.NewSession(scope, oidcNonce, user2, "sum", "S256")
 	assert.NoError(t, err)
 
 	keypair, err := mockoidc.DefaultKeypair()

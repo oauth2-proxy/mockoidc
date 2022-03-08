@@ -4,13 +4,20 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/golang-jwt/jwt"
 	"gopkg.in/square/go-jose.v2"
+)
+
+const (
+	CodeChallengeMethodPlain = "plain"
+	CodeChallengeMethodS256  = "S256"
 )
 
 const DefaultKey = `MIIEowIBAAKCAQEAtI1Jf2zmfwLzpAjVarORtjKtmCHQtgNxqWDdVNVa` +
@@ -165,4 +172,16 @@ func randomNonce(length int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func GenerateCodeChallenge(method, codeVerifier string) (string, error) {
+	switch method {
+	case CodeChallengeMethodPlain:
+		return codeVerifier, nil
+	case CodeChallengeMethodS256:
+		shaSum := sha256.Sum256([]byte(codeVerifier))
+		return base64.RawURLEncoding.EncodeToString(shaSum[:]), nil
+	default:
+		return "", fmt.Errorf("unknown challenge method: %v", method)
+	}
 }

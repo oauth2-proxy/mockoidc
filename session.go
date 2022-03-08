@@ -10,11 +10,13 @@ import (
 
 // Session stores a User and their OIDC options across requests
 type Session struct {
-	SessionID string
-	Scopes    []string
-	OIDCNonce string
-	User      User
-	Granted   bool
+	SessionID           string
+	Scopes              []string
+	OIDCNonce           string
+	User                User
+	Granted             bool
+	CodeChallenge       string
+	CodeChallengeMethod string
 }
 
 // SessionStore manages our Session objects
@@ -39,17 +41,19 @@ func NewSessionStore() *SessionStore {
 }
 
 // NewSession creates a new Session for a User
-func (ss *SessionStore) NewSession(scope string, nonce string, user User) (*Session, error) {
+func (ss *SessionStore) NewSession(scope string, nonce string, user User, codeChallenge string, codeChallengeMethod string) (*Session, error) {
 	sessionID, err := ss.CodeQueue.Pop()
 	if err != nil {
 		return nil, err
 	}
 
 	session := &Session{
-		SessionID: sessionID,
-		Scopes:    strings.Split(scope, " "),
-		OIDCNonce: nonce,
-		User:      user,
+		SessionID:           sessionID,
+		Scopes:              strings.Split(scope, " "),
+		OIDCNonce:           nonce,
+		User:                user,
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
 	}
 	ss.Store[sessionID] = session
 
