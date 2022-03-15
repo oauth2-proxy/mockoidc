@@ -243,6 +243,22 @@ func TestMockOIDC_Config(t *testing.T) {
 	assert.Equal(t, m.CodeChallengeMethodsSupported, cfg.CodeChallengeMethodsSupported)
 }
 
+func TestMockOIDC_ConfigBaseIssuer(t *testing.T) {
+	m, err := mockoidc.Run()
+	assert.NoError(t, err)
+	defer m.Shutdown()
+
+	m.IssuerBaseUrl = "https://idp.oidc.proxy.com"
+
+	cfg := m.Config()
+	assert.Equal(t, m.ClientID, cfg.ClientID)
+	assert.Equal(t, m.ClientSecret, cfg.ClientSecret)
+	assert.Equal(t, m.Issuer(), cfg.Issuer)
+	assert.Equal(t, m.AccessTTL, cfg.AccessTTL)
+	assert.Equal(t, m.RefreshTTL, cfg.RefreshTTL)
+	assert.Equal(t, m.CodeChallengeMethodsSupported, cfg.CodeChallengeMethodsSupported)
+}
+
 func TestMockOIDC_QueueError(t *testing.T) {
 	m, err := mockoidc.Run()
 	assert.NoError(t, err)
