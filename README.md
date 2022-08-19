@@ -5,6 +5,7 @@ A Mock OpenID Connect Server for Authentication Unit and Integration Tests.
 Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium.com/in-the-weeds)
 2021 Q1 Hack Day.
 
+[![GoDoc](https://godoc.org/github.com/oauth2-proxy/mockoidc?status.png)](https://pkg.go.dev/github.com/oauth2-proxy/mockoidc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/oauth2-proxy/mockoidc)](https://goreportcard.com/report/github.com/oauth2-proxy/mockoidc)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Maintainability](https://api.codeclimate.com/v1/badges/99c0561090d1002dc7e3/maintainability)](https://codeclimate.com/github/oauth2-proxy/mockoidc/maintainability)
