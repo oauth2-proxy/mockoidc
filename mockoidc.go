@@ -79,7 +79,7 @@ func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 		CodeChallengeMethodsSupported: []string{"plain", "S256"},
 		Keypair:                       keypair,
 		SessionStore:                  NewSessionStore(),
-		UserQueue:                     &UserQueue{},
+		UserQueue:                     &UserQueue{DefaultUser: DefaultUser()},
 		ErrorQueue:                    &ErrorQueue{},
 	}, nil
 }
@@ -167,6 +167,14 @@ func (m *MockOIDC) Config() *Config {
 // off the queue and create a session with them.
 func (m *MockOIDC) QueueUser(user User) {
 	m.UserQueue.Push(user)
+}
+
+// SetDefaultUser allows setting the default mock User object to return for
+// authentication when the authentication queue is empty.
+// Calls to the `authorization_endpoint` will return the set user instead of
+// `DefaultUser()` when the queue is empty.
+func (m *MockOIDC) SetDefaultUser(user User) {
+	m.UserQueue.SetDefaultUser(user)
 }
 
 // QueueCode allows adding mock code strings to the authentication queue.

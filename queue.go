@@ -7,6 +7,8 @@ import "sync"
 type UserQueue struct {
 	sync.Mutex
 	Queue []User
+
+	DefaultUser User
 }
 
 // CodeQueue manages the queue of codes returned for each
@@ -37,18 +39,26 @@ func (q *UserQueue) Push(user User) {
 	q.Queue = append(q.Queue, user)
 }
 
-// Pop a User from the Queue. If empty, return `DefaultUser()`
+// Pop a User from the Queue. If empty, return `q.DefaultUser` if set, otherwise
+// `DefaultUser()`
 func (q *UserQueue) Pop() User {
 	q.Lock()
 	defer q.Unlock()
 
-	if len(q.Queue) == 0 {
+	if len(q.Queue) == 0 && q.DefaultUser != nil {
+		return q.DefaultUser
+	} else if len(q.Queue) == 0 {
 		return DefaultUser()
 	}
 
 	var user User
 	user, q.Queue = q.Queue[0], q.Queue[1:]
 	return user
+}
+
+// SetDefaultUser configures the queue with the default user to return when empty.
+func (q *UserQueue) SetDefaultUser(user User) {
+	q.DefaultUser = user
 }
 
 // Push adds a code to the Queue to be returned by subsequent

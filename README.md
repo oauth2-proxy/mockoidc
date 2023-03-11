@@ -32,7 +32,7 @@ cfg := m.Config()
 //   	ClientID     string
 //   	ClientSecret string
 //   	Issuer       string
-//   
+//
 //   	AccessTTL  time.Duration
 //   	RefreshTTL time.Duration
 // }
@@ -95,6 +95,15 @@ m.QueueUser(user)
 m.QueueCode("12345")
 
 // ...Request to m.AuthorizationEndpoint()
+```
+
+You can also override the default user that is returned:
+
+```
+user := &mockoidc.User{
+    // User details...
+}
+m.SetDefaultUser(user)
 ```
 
 ### Forcing Errors
