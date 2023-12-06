@@ -54,6 +54,7 @@ type mockUserinfo struct {
 	Phone             string   `json:"phone_number,omitempty"`
 	Address           string   `json:"address,omitempty"`
 	Groups            []string `json:"groups,omitempty"`
+	EmailVerified     bool     `json:"email_verified"`
 }
 
 func (u *MockUser) ID() string {
@@ -70,6 +71,7 @@ func (u *MockUser) Userinfo(scope []string) ([]byte, error) {
 		Phone:             user.Phone,
 		Address:           user.Address,
 		Groups:            user.Groups,
+		EmailVerified:     user.EmailVerified,
 	}
 
 	return json.Marshal(info)
