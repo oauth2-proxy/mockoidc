@@ -295,10 +295,13 @@ func (m *MockOIDC) setTokens(tr *tokenResponse, s *Session, grantType string) er
 	if err != nil {
 		return err
 	}
-	if len(s.Scopes) > 0 && s.Scopes[0] == openidScope {
-		tr.IDToken, err = s.IDToken(m.Config(), m.Keypair, m.Now())
-		if err != nil {
-			return err
+	for _, scope := range s.Scopes {
+		if scope == openidScope {
+			tr.IDToken, err = s.IDToken(m.Config(), m.Keypair, m.Now())
+			if err != nil {
+				return err
+			}
+			break
 		}
 	}
 	if grantType != "refresh_token" {

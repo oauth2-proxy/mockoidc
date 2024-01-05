@@ -71,8 +71,11 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	m, err := mockoidc.NewServer(nil)
 	assert.NoError(t, err)
 
+	// Note: we're setting openid to the end of the scope list to test
+	// that ordering is not considered when checking for "openid" in the
+	// list
 	session, _ := m.SessionStore.NewSession(
-		"openid email profile", "nonce", mockoidc.DefaultUser(), "", "")
+		"email profile openid", "nonce", mockoidc.DefaultUser(), "", "")
 
 	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
 
