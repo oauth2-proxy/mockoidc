@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/assert"
 )
@@ -32,10 +32,6 @@ func TestRun(t *testing.T) {
 	m, err := mockoidc.Run()
 	assert.NoError(t, err)
 	defer m.Shutdown()
-
-	// Override jwt.TimeFunc with our timer
-	reset := m.Synchronize()
-	defer reset()
 
 	// ************************************************************************
 	// Stage 0: Get Discovery documents
@@ -122,11 +118,11 @@ func TestRun(t *testing.T) {
 	err = json.Unmarshal(body, &tokens)
 	assert.NoError(t, err)
 
-	_, err = m.Keypair.VerifyJWT(tokens["access_token"].(string))
+	_, err = m.Keypair.VerifyJWT(tokens["access_token"].(string), m.Now)
 	assert.NoError(t, err)
-	_, err = m.Keypair.VerifyJWT(tokens["refresh_token"].(string))
+	_, err = m.Keypair.VerifyJWT(tokens["refresh_token"].(string), m.Now)
 	assert.NoError(t, err)
-	idToken, err := m.Keypair.VerifyJWT(tokens["id_token"].(string))
+	idToken, err := m.Keypair.VerifyJWT(tokens["id_token"].(string), m.Now)
 	assert.NoError(t, err)
 
 	// The nonce we set initially is in our ID Token
@@ -184,11 +180,11 @@ func TestRun(t *testing.T) {
 	err = json.Unmarshal(refreshBody, &refreshedTokens)
 	assert.NoError(t, err)
 
-	_, err = m.Keypair.VerifyJWT(refreshedTokens["access_token"].(string))
+	_, err = m.Keypair.VerifyJWT(refreshedTokens["access_token"].(string), m.Now)
 	assert.NoError(t, err)
-	_, err = m.Keypair.VerifyJWT(refreshedTokens["refresh_token"].(string))
+	_, err = m.Keypair.VerifyJWT(refreshedTokens["refresh_token"].(string), m.Now)
 	assert.NoError(t, err)
-	refreshedIDToken, err := m.Keypair.VerifyJWT(refreshedTokens["id_token"].(string))
+	refreshedIDToken, err := m.Keypair.VerifyJWT(refreshedTokens["id_token"].(string), m.Now)
 	assert.NoError(t, err)
 
 	// The nonce we set initially is STILL in our ID Token
@@ -366,12 +362,12 @@ func setTime() {
 	mockoidc.NowFunc = func() time.Time {
 		return time.Unix(TestNow, 0)
 	}
-	jwt.TimeFunc = func() time.Time {
+	jwt.WithTimeFunc(func() time.Time {
 		return time.Unix(TestNow, 0)
-	}
+	})
 }
 
 func resetTime() {
 	mockoidc.NowFunc = time.Now
-	jwt.TimeFunc = time.Now
+	jwt.WithTimeFunc(time.Now)
 }

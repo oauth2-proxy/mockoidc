@@ -10,9 +10,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
-	"github.com/golang-jwt/jwt"
-	"gopkg.in/square/go-jose.v2"
+	"github.com/go-jose/go-jose/v3"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
@@ -152,7 +153,7 @@ func (k *Keypair) SignJWT(claims jwt.Claims) (string, error) {
 }
 
 // VerifyJWT verifies the signature of a token was signed with this Keypair
-func (k *Keypair) VerifyJWT(token string) (*jwt.Token, error) {
+func (k *Keypair) VerifyJWT(token string, nowFunc func() time.Time) (*jwt.Token, error) {
 	return jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		kid, err := k.KeyID()
 		if err != nil {
@@ -162,7 +163,7 @@ func (k *Keypair) VerifyJWT(token string) (*jwt.Token, error) {
 			return k.PublicKey, nil
 		}
 		return nil, errors.New("token kid does not match or is not present")
-	})
+	}, jwt.WithTimeFunc(nowFunc))
 }
 
 func randomNonce(length int) (string, error) {

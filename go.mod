@@ -1,11 +1,17 @@
 module github.com/oauth2-proxy/mockoidc
 
-go 1.16
+go 1.21
 
 require (
-	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/google/go-cmp v0.5.4 // indirect
-	github.com/stretchr/testify v1.7.0
+	github.com/go-jose/go-jose/v3 v3.0.1
+	github.com/golang-jwt/jwt/v5 v5.2.0
+	github.com/stretchr/testify v1.8.4
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
-	gopkg.in/square/go-jose.v2 v2.6.0
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
