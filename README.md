@@ -13,7 +13,7 @@ Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium
 ## Usage
 
 Import the package
-```
+```go
 import "github.com/oauth2-proxy/mockoidc"
 ```
 
