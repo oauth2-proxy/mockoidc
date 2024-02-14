@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
@@ -403,7 +403,7 @@ func (m *MockOIDC) authorizeBearer(rw http.ResponseWriter, req *http.Request) (*
 }
 
 func (m *MockOIDC) authorizeToken(t string, rw http.ResponseWriter) (*jwt.Token, bool) {
-	token, err := m.Keypair.VerifyJWT(t)
+	token, err := m.Keypair.VerifyJWT(t, m.Now)
 	if err != nil {
 		errorResponse(rw, InvalidRequest, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
 		return nil, false

@@ -9,8 +9,6 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/golang-jwt/jwt"
 )
 
 // NowFunc is an overrideable version of `time.Now`. Tests that need to
@@ -193,19 +191,6 @@ func (m *MockOIDC) FastForward(d time.Duration) time.Duration {
 // Now is what MockOIDC thinks time.Now is
 func (m *MockOIDC) Now() time.Time {
 	return NowFunc().Add(m.fastForward)
-}
-
-// TimeReset is a function that resets time
-type TimeReset func()
-
-// Synchronize sets the jwt.TimeFunc to our mutated view of time.
-// It returns a func that can reset it to its original state.
-func (m *MockOIDC) Synchronize() TimeReset {
-	original := jwt.TimeFunc
-
-	jwt.TimeFunc = m.Now
-
-	return func() { jwt.TimeFunc = original }
 }
 
 // Addr returns the server address (if started)

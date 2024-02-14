@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/assert"
 )
@@ -127,7 +127,7 @@ func TestMockUser_Claims(t *testing.T) {
 			tokenStr, err := keypair.SignJWT(claims)
 			assert.NoError(t, err)
 
-			token, err := keypair.VerifyJWT(tokenStr)
+			token, err := keypair.VerifyJWT(tokenStr, mockoidc.NowFunc)
 			assert.NoError(t, err)
 			assert.True(t, token.Valid)
 

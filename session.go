@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Session stores a User and their OIDC options across requests
@@ -29,7 +29,7 @@ type SessionStore struct {
 // should use in their jwt.Claims building.
 type IDTokenClaims struct {
 	Nonce string `json:"nonce,omitempty"`
-	*jwt.StandardClaims
+	*jwt.RegisteredClaims
 }
 
 // NewSessionStore initializes the SessionStore for this server
@@ -84,14 +84,14 @@ func (ss *SessionStore) GetSessionByToken(token *jwt.Token) (*Session, error) {
 // AccessToken returns the JWT token with the appropriate claims for
 // an access token
 func (s *Session) AccessToken(config *Config, kp *Keypair, now time.Time) (string, error) {
-	claims := s.standardClaims(config, config.AccessTTL, now)
+	claims := s.registeredClaims(config, config.AccessTTL, now)
 	return kp.SignJWT(claims)
 }
 
 // RefreshToken returns the JWT token with the appropriate claims for
 // a refresh token
 func (s *Session) RefreshToken(config *Config, kp *Keypair, now time.Time) (string, error) {
-	claims := s.standardClaims(config, config.RefreshTTL, now)
+	claims := s.registeredClaims(config, config.RefreshTTL, now)
 	return kp.SignJWT(claims)
 }
 
@@ -99,8 +99,8 @@ func (s *Session) RefreshToken(config *Config, kp *Keypair, now time.Time) (stri
 // based on the scopes set.
 func (s *Session) IDToken(config *Config, kp *Keypair, now time.Time) (string, error) {
 	base := &IDTokenClaims{
-		StandardClaims: s.standardClaims(config, config.AccessTTL, now),
-		Nonce:          s.OIDCNonce,
+		RegisteredClaims: s.registeredClaims(config, config.AccessTTL, now),
+		Nonce:            s.OIDCNonce,
 	}
 	claims, err := s.User.Claims(s.Scopes, base)
 	if err != nil {
@@ -110,14 +110,14 @@ func (s *Session) IDToken(config *Config, kp *Keypair, now time.Time) (string, e
 	return kp.SignJWT(claims)
 }
 
-func (s *Session) standardClaims(config *Config, ttl time.Duration, now time.Time) *jwt.StandardClaims {
-	return &jwt.StandardClaims{
-		Audience:  config.ClientID,
-		ExpiresAt: now.Add(ttl).Unix(),
-		Id:        s.SessionID,
-		IssuedAt:  now.Unix(),
+func (s *Session) registeredClaims(config *Config, ttl time.Duration, now time.Time) *jwt.RegisteredClaims {
+	return &jwt.RegisteredClaims{
+		Audience:  jwt.ClaimStrings{config.ClientID},
+		ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+		ID:        s.SessionID,
+		IssuedAt:  jwt.NewNumericDate(now),
 		Issuer:    config.Issuer,
-		NotBefore: now.Unix(),
+		NotBefore: jwt.NewNumericDate(now),
 		Subject:   s.User.ID(),
 	}
 }

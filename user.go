@@ -3,7 +3,7 @@ package mockoidc
 import (
 	"encoding/json"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // User represents a mock user that the server will grant Oauth tokens for.

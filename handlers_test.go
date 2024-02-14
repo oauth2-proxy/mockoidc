@@ -133,7 +133,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 		"id_token",
 	} {
 		t.Run(key, func(t *testing.T) {
-			_, err := m.Keypair.VerifyJWT(tokenResp[key].(string))
+			_, err := m.Keypair.VerifyJWT(tokenResp[key].(string), m.Now)
 			assert.NoError(t, err)
 		})
 	}
@@ -279,7 +279,7 @@ func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
 		"id_token",
 	} {
 		t.Run(key, func(t *testing.T) {
-			_, err := m.Keypair.VerifyJWT(tokenResp[key].(string))
+			_, err := m.Keypair.VerifyJWT(tokenResp[key].(string), m.Now)
 			assert.NoError(t, err)
 		})
 	}
