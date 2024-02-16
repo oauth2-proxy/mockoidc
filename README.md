@@ -13,7 +13,7 @@ Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium
 ## Usage
 
 Import the package
-```
+```go
 import "github.com/oauth2-proxy/mockoidc"
 ```
 
@@ -23,7 +23,7 @@ goroutine. It will listen on localhost on a random port.
 Then pull its configuration to integrate it with your application. Begin
 testing!
 
-```
+```go
 m, _ := mockoidc.Run()
 defer m.Shutdown()
 
@@ -43,7 +43,7 @@ cfg := m.Config()
 Alternatively, if you provide your own `tls.Config`, the server can run with
 TLS:
 
-```
+```go
 tlsConfig = &tls.Config{
     // ...your TLS settings
 }
@@ -58,7 +58,7 @@ The following endpoints are implemented. They can either be pulled from the
 OIDC discovery document (`m.Issuer() + "/.well-known/openid-configuration`)
 or retrieved directly from the MockOIDC server.
 
-```
+```go
 m, _ := mockoidc.Run()
 defer m.Shutdown()
 
@@ -80,7 +80,7 @@ subsequent `token_endpoint` call.
 
 These can be seeded with your own test Users & codes that will be returned:
 
-```
+```go
 m, _ := mockoidc.Run()
 defer m.Shutdown()
 
@@ -102,7 +102,7 @@ m.QueueCode("12345")
 Arbitrary errors can also be queued for handlers to return instead of their
 default behavior:
 
-```
+```go
 m, err := mockoidc.Run()
 defer m.Shutdown()
 
@@ -120,14 +120,14 @@ time is completely mutable.
 
 You can override the server's view of `time.Now`
 
-```
+```go
 mockoidc.NowFunc = func() { //...custom logic }
 ```
 
 As tests are running, you can fast-forward time to critical test points (e.g.
 Access & Refresh Token expirations).
 
-```
+```go
 m, _ := mockoidc.Run()
 
 m.FastForward(time.Duration(1) * time.Hour)
@@ -140,7 +140,7 @@ Even though we can fast-forward time, the underlying tokens processed by the
 
 We need to synchronize our timer with theirs:
 
-```
+```go
 m, _ := mockoidc.Run()
 defer m.Shutdown()
 
@@ -157,7 +157,7 @@ defer reset()
 Everything started up with `mockoidc.Run()` can be done manually giving the
 opportunity to finely tune the settings:
 
-```
+```go
 // Create a fresh RSA Private Key for token signing
 rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
@@ -183,7 +183,7 @@ to predefined values (e.g. `clientID`, `clientSecret`, `AccessTTL`,
 Additional internal components of the MockOIDC server are public if you need
 to tamper with them as well:
 
-```
+```go
 type MockOIDC struct {
 	// ...other stuff
 
@@ -203,7 +203,7 @@ When configuring the MockOIDC server manually, you have the opportunity to add
 custom middleware before starting the server (e.g. request logging, test
 validators, etc).
 
-```
+```go
 m, _ := mockoidc.NewServer(nil)
 
 middleware := func(next http.Handler) http.Handler {
