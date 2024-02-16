@@ -208,6 +208,9 @@ func TestSession_IDToken_CustomUser(t *testing.T) {
 		},
 	}
 
+	// register the custom claim
+	mockoidc.ClaimsSupported = append(mockoidc.ClaimsSupported, "phone_verified")
+
 	keypair, _ := mockoidc.DefaultKeypair()
 	tokenString, err := customSession.IDToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
