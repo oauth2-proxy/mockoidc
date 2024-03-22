@@ -180,7 +180,8 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 	tr := &tokenResponse{
 		RefreshToken: req.Form.Get("refresh_token"),
 		TokenType:    "bearer",
-		ExpiresIn:    m.AccessTTL,
+		// expires_in in OAuth2 Token is the lifetime in seconds of the access token
+		ExpiresIn: m.AccessTTL / time.Second,
 	}
 	err = m.setTokens(tr, session, grantType)
 	if err != nil {
