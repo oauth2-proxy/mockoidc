@@ -43,7 +43,9 @@ func TestSessionStore_NewSession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, session.Scopes, []string{"openid", "email", "profile"})
 	assert.Equal(t, len(ss.Store), 1)
+	ss.RLock()
 	assert.Equal(t, ss.Store[session.SessionID], session)
+	ss.RUnlock()
 	assert.Equal(t, session.CodeChallenge, "sum")
 	assert.Equal(t, session.CodeChallengeMethod, "S256")
 }
