@@ -30,7 +30,7 @@ type MockUser struct {
 	PreferredUsername string
 	Phone             string
 	Address           string
-	Groups            []string
+	Groups            []MockGroup
 	CloudRoles        []string
 	Tenant            map[string]string
 	UserUuid          string
@@ -46,7 +46,7 @@ func DefaultUser() *MockUser {
 		PreferredUsername: "jane.doe",
 		Phone:             "555-987-6543",
 		Address:           "123 Main Street",
-		Groups:            []string{"engineering", "design"},
+		Groups:            []MockGroup{{Name: "engineering", UUID: "a3911826-94aa-4c00-8d99-c2a2e84e94ce"}, {Name: "design", UUID: "c1911826-94aa-4c00-8d99-c2a2e84e94cb"}},
 		EmailVerified:     true,
 		CloudRoles:        []string{"b199ac60-ef4a-11ee-84e9-506b8dba89b0"},
 		UserUuid:          "e3911826-94aa-4c00-8d99-c2a2e84e94ca",
@@ -57,12 +57,18 @@ func DefaultUser() *MockUser {
 	}
 }
 
+// MockGroup is the group object
+type MockGroup struct {
+	Name string `json:"name"`
+	UUID string `json:"uuid"`
+}
+
 type mockUserinfo struct {
-	Email             string   `json:"email,omitempty"`
-	PreferredUsername string   `json:"preferred_username,omitempty"`
-	Phone             string   `json:"phone_number,omitempty"`
-	Address           string   `json:"address,omitempty"`
-	Groups            []string `json:"groups,omitempty"`
+	Email             string      `json:"email,omitempty"`
+	PreferredUsername string      `json:"preferred_username,omitempty"`
+	Phone             string      `json:"phone_number,omitempty"`
+	Address           string      `json:"address,omitempty"`
+	Groups            []MockGroup `json:"groups,omitempty"`
 }
 
 func (u *MockUser) ID() string {
@@ -90,7 +96,7 @@ type mockClaims struct {
 	PreferredUsername string            `json:"preferred_username,omitempty"`
 	Phone             string            `json:"phone_number,omitempty"`
 	Address           string            `json:"address,omitempty"`
-	Groups            []string          `json:"groups,omitempty"`
+	Groups            []MockGroup       `json:"groups,omitempty"`
 	CloudRoles        []string          `json:"cloud_roles,omitempty"`
 	Tenant            map[string]string `json:"tenant,omitempty"`
 	UserUuid          string            `json:"user_uuid,omitempty"`
@@ -133,7 +139,7 @@ func (u *MockUser) scopedClone(scopes []string) *MockUser {
 			clone.Email = u.Email
 			clone.EmailVerified = u.EmailVerified
 		case "groups":
-			clone.Groups = append(make([]string, 0, len(u.Groups)), u.Groups...)
+			clone.Groups = append(make([]MockGroup, 0, len(u.Groups)), u.Groups...)
 		}
 	}
 	return clone
