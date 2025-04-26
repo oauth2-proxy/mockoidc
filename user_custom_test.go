@@ -70,7 +70,7 @@ func (ctu *CustomTestUser) Userinfo(scope []string) ([]byte, error) {
 	return json.Marshal(info)
 }
 
-func (ctu *CustomTestUser) Claim(scope []string, claims *mockoidc.IDTokenClaims) (jwt.Claims, error) {
+func (ctu *CustomTestUser) Claims(scope []string, claims *mockoidc.IDTokenClaims) (jwt.Claims, error) {
 	user := ctu.scopedClone(scope)
 	return &mockCustomeTestUserClaims{
 		IDTokenClaims: claims,
