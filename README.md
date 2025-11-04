@@ -9,6 +9,7 @@ Created by @NickMeves and @egrif during the [Greenhouse Software](https://medium
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Maintainability](https://api.codeclimate.com/v1/badges/99c0561090d1002dc7e3/maintainability)](https://codeclimate.com/github/oauth2-proxy/mockoidc/maintainability)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/99c0561090d1002dc7e3/test_coverage)](https://codeclimate.com/github/oauth2-proxy/mockoidc/test_coverage)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Foauth2-proxy%2Fmockoidc.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Foauth2-proxy%2Fmockoidc?ref=badge_shield)
 
 ## Usage
 
@@ -216,3 +217,7 @@ middleware := func(next http.Handler) http.Handler {
 
 m.AddMiddleware(middleware)
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Foauth2-proxy%2Fmockoidc.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Foauth2-proxy%2Fmockoidc?ref=badge_large)
