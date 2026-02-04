@@ -48,7 +48,9 @@ func DefaultUser() *MockUser {
 }
 
 type mockUserinfo struct {
+	Subject           string   `json:"sub,omitempty"`
 	Email             string   `json:"email,omitempty"`
+	EmailVerified     bool     `json:"email_verified,omitempty"`
 	PreferredUsername string   `json:"preferred_username,omitempty"`
 	Phone             string   `json:"phone_number,omitempty"`
 	Address           string   `json:"address,omitempty"`
@@ -63,7 +65,9 @@ func (u *MockUser) Userinfo(scope []string) ([]byte, error) {
 	user := u.scopedClone(scope)
 
 	info := &mockUserinfo{
+		Subject:           user.Subject,
 		Email:             user.Email,
+		EmailVerified:     user.EmailVerified,
 		PreferredUsername: user.PreferredUsername,
 		Phone:             user.Phone,
 		Address:           user.Address,
