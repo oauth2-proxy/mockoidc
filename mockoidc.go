@@ -20,11 +20,14 @@ var NowFunc = time.Now
 type MockOIDC struct {
 	ClientID     string
 	ClientSecret string
+	PublicClient bool
 
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
 
 	CodeChallengeMethodsSupported []string
+
+	Hostname string
 
 	// Normally, these would be private. Expose them publicly for
 	// power users.
@@ -202,7 +205,13 @@ func (m *MockOIDC) Addr() string {
 	if m.tlsConfig != nil {
 		proto = "https"
 	}
-	return fmt.Sprintf("%s://%s", proto, m.Server.Addr)
+
+	hostname := m.Hostname
+	if hostname == "" {
+		hostname = m.Server.Addr
+	}
+
+	return fmt.Sprintf("%s://%s", proto, hostname)
 }
 
 // Issuer returns the OIDC Issuer that will be in `iss` token claims
