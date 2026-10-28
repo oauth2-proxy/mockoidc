@@ -114,6 +114,7 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 	handler.Handle(UserinfoEndpoint, m.chainMiddleware(m.Userinfo))
 	handler.Handle(JWKSEndpoint, m.chainMiddleware(m.JWKS))
 	handler.Handle(DiscoveryEndpoint, m.chainMiddleware(m.Discovery))
+	handler.Handle(DeviceEndpoint, m.chainMiddleware(m.Device))
 
 	m.Server = &http.Server{
 		Addr:      ln.Addr().String(),
@@ -236,6 +237,15 @@ func (m *MockOIDC) TokenEndpoint() string {
 	}
 	return m.Addr() + TokenEndpoint
 }
+
+// DeviceEndpoint returns the OIDC `device_authorization_endpoint`
+func (m *MockOIDC) DeviceEndpoint() string {
+	if m.Server == nil {
+		return ""
+	}
+	return m.Addr() + DeviceEndpoint
+}
+
 
 // UserinfoEndpoint returns the OIDC `userinfo_endpoint`
 func (m *MockOIDC) UserinfoEndpoint() string {

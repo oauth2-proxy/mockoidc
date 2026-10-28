@@ -16,6 +16,7 @@ const (
 	IssuerBase            = "/oidc"
 	AuthorizationEndpoint = "/oidc/authorize"
 	TokenEndpoint         = "/oidc/token"
+	DeviceEndpoint         = "/oidc/device"
 	UserinfoEndpoint      = "/oidc/userinfo"
 	JWKSEndpoint          = "/oidc/.well-known/jwks.json"
 	DiscoveryEndpoint     = "/oidc/.well-known/openid-configuration"
@@ -36,6 +37,7 @@ var (
 	GrantTypesSupported = []string{
 		"authorization_code",
 		"refresh_token",
+		"urn:ietf:params:oauth:grant-type:device_code",
 	}
 	ResponseTypesSupported = []string{
 		"code",
@@ -337,6 +339,7 @@ type discoveryResponse struct {
 	Issuer                string `json:"issuer"`
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
+	DeviceEndpoint         string `json:"device_authorization_endpoint"`
 	JWKSUri               string `json:"jwks_uri"`
 	UserinfoEndpoint      string `json:"userinfo_endpoint"`
 
@@ -357,6 +360,7 @@ func (m *MockOIDC) Discovery(rw http.ResponseWriter, _ *http.Request) {
 		Issuer:                m.Issuer(),
 		AuthorizationEndpoint: m.AuthorizationEndpoint(),
 		TokenEndpoint:         m.TokenEndpoint(),
+		DeviceEndpoint:        m.DeviceEndpoint(),
 		JWKSUri:               m.JWKSEndpoint(),
 		UserinfoEndpoint:      m.UserinfoEndpoint(),
 
