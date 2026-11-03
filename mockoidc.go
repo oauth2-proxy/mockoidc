@@ -21,6 +21,8 @@ type MockOIDC struct {
 	ClientID     string
 	ClientSecret string
 
+	IssuerBaseUrl string
+
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
 
@@ -210,7 +212,14 @@ func (m *MockOIDC) Issuer() string {
 	if m.Server == nil {
 		return ""
 	}
+
+	// Generate the Issue from IssuerBaseUrl and the root path /oidc
+	if m.IssuerBaseUrl != "" {
+		return m.IssuerBaseUrl + IssuerBase
+	}
+
 	return m.Addr() + IssuerBase
+
 }
 
 // DiscoveryEndpoint returns the full `/.well-known/openid-configuration` URL
@@ -218,6 +227,12 @@ func (m *MockOIDC) DiscoveryEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
+
+	// Generate the Issue from IssuerBaseUrl
+	if m.IssuerBaseUrl != "" {
+		return m.IssuerBaseUrl + DiscoveryEndpoint
+	}
+
 	return m.Addr() + DiscoveryEndpoint
 }
 
@@ -226,6 +241,12 @@ func (m *MockOIDC) AuthorizationEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
+
+	// Generate the Issue from IssuerBaseUrl
+	if m.IssuerBaseUrl != "" {
+		return m.IssuerBaseUrl + AuthorizationEndpoint
+	}
+
 	return m.Addr() + AuthorizationEndpoint
 }
 
@@ -234,6 +255,12 @@ func (m *MockOIDC) TokenEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
+
+	// Generate the Issue from IssuerBaseUrl
+	if m.IssuerBaseUrl != "" {
+		return m.IssuerBaseUrl + TokenEndpoint
+	}
+
 	return m.Addr() + TokenEndpoint
 }
 
@@ -242,6 +269,12 @@ func (m *MockOIDC) UserinfoEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
+
+	// Generate the Issue from IssuerBaseUrl
+	if m.IssuerBaseUrl != "" {
+		return m.IssuerBaseUrl + UserinfoEndpoint
+	}
+
 	return m.Addr() + UserinfoEndpoint
 }
 
@@ -250,6 +283,12 @@ func (m *MockOIDC) JWKSEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
+
+	// Generate the Issue from IssuerBaseUrl
+	if m.IssuerBaseUrl != "" {
+		return m.IssuerBaseUrl + JWKSEndpoint
+	}
+
 	return m.Addr() + JWKSEndpoint
 }
 
