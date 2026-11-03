@@ -141,6 +141,15 @@ func TestRun(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
+	defer resp.Body.Close()
+	userinfoBody, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+
+	userinfoData := make(map[string]interface{})
+	err = json.Unmarshal(userinfoBody, &userinfoData)
+	assert.NoError(t, err)
+	assert.Equal(t, mockoidc.DefaultUser().Subject, userinfoData["sub"])
+
 	// ************************************************************************
 	// Stage 4: Expired Tokens don't work
 	// ************************************************************************

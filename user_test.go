@@ -12,34 +12,39 @@ import (
 func TestMockUser_Userinfo(t *testing.T) {
 	testUser := mockoidc.DefaultUser()
 	testCases := map[string]struct {
-		Scope          []string
-		ExpectedEmail  string
-		ExpectedPhone  string
-		ExpectedGroups []string
+		Scope           []string
+		ExpectedSubject string
+		ExpectedEmail   string
+		ExpectedPhone   string
+		ExpectedGroups  []string
 	}{
 		"all scopes": {
-			Scope:          []string{"openid", "email", "profile", "groups"},
-			ExpectedEmail:  testUser.Email,
-			ExpectedPhone:  testUser.Phone,
-			ExpectedGroups: testUser.Groups,
+			Scope:           []string{"openid", "email", "profile", "groups"},
+			ExpectedSubject: testUser.Subject,
+			ExpectedEmail:   testUser.Email,
+			ExpectedPhone:   testUser.Phone,
+			ExpectedGroups:  testUser.Groups,
 		},
 		"missing groups scope": {
-			Scope:          []string{"openid", "email", "profile"},
-			ExpectedEmail:  testUser.Email,
-			ExpectedPhone:  testUser.Phone,
-			ExpectedGroups: nil,
+			Scope:           []string{"openid", "email", "profile"},
+			ExpectedSubject: testUser.Subject,
+			ExpectedEmail:   testUser.Email,
+			ExpectedPhone:   testUser.Phone,
+			ExpectedGroups:  nil,
 		},
 		"missing profile scope": {
-			Scope:          []string{"openid", "email", "groups"},
-			ExpectedEmail:  testUser.Email,
-			ExpectedPhone:  "",
-			ExpectedGroups: testUser.Groups,
+			Scope:           []string{"openid", "email", "groups"},
+			ExpectedSubject: testUser.Subject,
+			ExpectedEmail:   testUser.Email,
+			ExpectedPhone:   "",
+			ExpectedGroups:  testUser.Groups,
 		},
 		"missing email scope": {
-			Scope:          []string{"openid", "profile", "groups"},
-			ExpectedEmail:  "",
-			ExpectedPhone:  testUser.Phone,
-			ExpectedGroups: testUser.Groups,
+			Scope:           []string{"openid", "profile", "groups"},
+			ExpectedSubject: testUser.Subject,
+			ExpectedEmail:   "",
+			ExpectedPhone:   testUser.Phone,
+			ExpectedGroups:  testUser.Groups,
 		},
 	}
 	for name, tc := range testCases {
@@ -50,6 +55,12 @@ func TestMockUser_Userinfo(t *testing.T) {
 			data := make(map[string]interface{})
 			err = json.Unmarshal(payload, &data)
 			assert.NoError(t, err)
+
+			if tc.ExpectedSubject == "" {
+				assert.Nil(t, data["sub"])
+			} else {
+				assert.Equal(t, tc.ExpectedSubject, data["sub"])
+			}
 
 			if tc.ExpectedEmail == "" {
 				assert.Nil(t, data["email"])
@@ -72,6 +83,18 @@ func TestMockUser_Userinfo(t *testing.T) {
 			assert.Equal(t, tc.ExpectedGroups, groups)
 		})
 	}
+
+	t.Run("empty subject", func(t *testing.T) {
+		emptyUser := &mockoidc.MockUser{}
+		payload, err := emptyUser.Userinfo([]string{"openid"})
+		assert.NoError(t, err)
+
+		data := make(map[string]interface{})
+		err = json.Unmarshal(payload, &data)
+		assert.NoError(t, err)
+
+		assert.Nil(t, data["sub"])
+	})
 }
 
 func TestMockUser_Claims(t *testing.T) {
