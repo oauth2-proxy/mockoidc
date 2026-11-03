@@ -198,7 +198,12 @@ func (m *MockOIDC) Token(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (m *MockOIDC) validateTokenParams(rw http.ResponseWriter, req *http.Request) bool {
-	if !assertPresence([]string{"client_id", "client_secret", "grant_type"}, rw, req) {
+	requiredParams := []string{"client_id", "grant_type"}
+	if !m.PublicClient {
+		requiredParams = append(requiredParams, "client_secret")
+	}
+
+	if !assertPresence(requiredParams, rw, req) {
 		return false
 	}
 
@@ -207,10 +212,13 @@ func (m *MockOIDC) validateTokenParams(rw http.ResponseWriter, req *http.Request
 	if !equal {
 		return false
 	}
-	equal = assertEqual("client_secret", m.ClientSecret,
-		InvalidClient, "Invalid client secret", rw, req)
-	if !equal {
-		return false
+
+	if !m.PublicClient {
+		equal = assertEqual("client_secret", m.ClientSecret,
+			InvalidClient, "Invalid client secret", rw, req)
+		if !equal {
+			return false
+		}
 	}
 
 	return true
