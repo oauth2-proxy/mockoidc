@@ -27,26 +27,26 @@ func TestMockOIDC_Authorize(t *testing.T) {
 	data.Set("client_id", m.ClientID)
 	data.Set("code_challenge", "somehash")
 	data.Set("code_challenge_method", "S256")
-	assert.HTTPError(t, m.Authorize, http.MethodGet, mockoidc.AuthorizationEndpoint, nil)
+	assert.HTTPError(t, m.Authorize, http.MethodGet, m.EndpointConfig.AuthorizationEndpoint, nil)
 
 	// valid request
 	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizationEndpoint, data, http.StatusFound)
+		m.EndpointConfig.AuthorizationEndpoint, data, http.StatusFound)
 
 	// Bad client ID
 	data.Set("client_id", "wrong_id")
 	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizationEndpoint, data, http.StatusUnauthorized)
+		m.EndpointConfig.AuthorizationEndpoint, data, http.StatusUnauthorized)
 	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizationEndpoint, data, mockoidc.InvalidClient)
+		m.EndpointConfig.AuthorizationEndpoint, data, mockoidc.InvalidClient)
 
 	// Bad code challenge method
 	data.Set("client_id", m.ClientID)
 	data.Set("code_challenge_method", "does not exist")
 	assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizationEndpoint, data, http.StatusBadRequest)
+		m.EndpointConfig.AuthorizationEndpoint, data, http.StatusBadRequest)
 	assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
-		mockoidc.AuthorizationEndpoint, data, mockoidc.InvalidRequest)
+		m.EndpointConfig.AuthorizationEndpoint, data, mockoidc.InvalidRequest)
 
 	// Missing required form values
 	for key := range data {
@@ -60,9 +60,9 @@ func TestMockOIDC_Authorize(t *testing.T) {
 			badData.Del(key)
 
 			assert.HTTPStatusCode(t, m.Authorize, http.MethodGet,
-				mockoidc.AuthorizationEndpoint, badData, http.StatusBadRequest)
+				m.EndpointConfig.AuthorizationEndpoint, badData, http.StatusBadRequest)
 			assert.HTTPBodyContains(t, m.Authorize, http.MethodGet,
-				mockoidc.AuthorizationEndpoint, badData, mockoidc.InvalidRequest)
+				m.EndpointConfig.AuthorizationEndpoint, badData, mockoidc.InvalidRequest)
 		})
 	}
 }
@@ -77,7 +77,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	session, _ := m.SessionStore.NewSession(
 		"email profile openid", "nonce", mockoidc.DefaultUser(), "", "")
 
-	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
+	assert.HTTPError(t, m.Token, http.MethodPost, m.EndpointConfig.TokenEndpoint, nil)
 
 	data := url.Values{}
 	data.Set("client_id", m.ClientID)
@@ -91,7 +91,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 			badData, _ := url.ParseQuery(data.Encode())
 			badData.Del(key)
 
-			rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+			rr := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, badData)
 			assert.Equal(t, http.StatusBadRequest, rr.Code)
 
 			body, err := ioutil.ReadAll(rr.Body)
@@ -107,7 +107,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 			assert.NoError(t, err)
 
 			badData.Set(key, "WRONG")
-			rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+			rr := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, badData)
 			if key == "grant_type" {
 				assert.Equal(t, http.StatusBadRequest, rr.Code)
 			} else {
@@ -117,7 +117,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	}
 
 	// good request; check responses
-	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	rr := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, data)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	tokenResp := make(map[string]interface{})
@@ -142,7 +142,7 @@ func TestMockOIDC_Token_CodeGrant(t *testing.T) {
 	}
 
 	// duplicate attempts are rejects
-	rrDup := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	rrDup := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, data)
 	assert.Equal(t, http.StatusUnauthorized, rrDup.Code)
 }
 
@@ -156,7 +156,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengePlain(t *testing.T) {
 		"openid email profile", "nonce", mockoidc.DefaultUser(),
 		codeChallenge, mockoidc.CodeChallengeMethodPlain)
 
-	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
+	assert.HTTPError(t, m.Token, http.MethodPost, m.EndpointConfig.TokenEndpoint, nil)
 
 	data := url.Values{}
 	data.Set("client_id", m.ClientID)
@@ -166,7 +166,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengePlain(t *testing.T) {
 	data.Set("code_verifier", "sum")
 
 	// good request; good response
-	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	rr := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, data)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	tokenResp := make(map[string]interface{})
@@ -177,7 +177,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengePlain(t *testing.T) {
 	badData, _ := url.ParseQuery(data.Encode())
 	badData.Del("code_verifier")
 
-	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	rr = testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, badData)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 
 	body, err := ioutil.ReadAll(rr.Body)
@@ -188,7 +188,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengePlain(t *testing.T) {
 	badData, _ = url.ParseQuery(data.Encode())
 	badData.Set("code_verifier", "WRONG")
 
-	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	rr = testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, badData)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 
 	body, err = ioutil.ReadAll(rr.Body)
@@ -206,7 +206,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengeHash(t *testing.T) {
 		"openid email profile", "nonce", mockoidc.DefaultUser(),
 		codeChallenge, mockoidc.CodeChallengeMethodS256)
 
-	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
+	assert.HTTPError(t, m.Token, http.MethodPost, m.EndpointConfig.TokenEndpoint, nil)
 
 	data := url.Values{}
 	data.Set("client_id", m.ClientID)
@@ -216,7 +216,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengeHash(t *testing.T) {
 	data.Set("code_verifier", "sum")
 
 	// good request; good response
-	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	rr := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, data)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	tokenResp := make(map[string]interface{})
@@ -227,7 +227,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengeHash(t *testing.T) {
 	badData, _ := url.ParseQuery(data.Encode())
 	badData.Del("code_verifier")
 
-	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	rr = testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, badData)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 
 	body, err := ioutil.ReadAll(rr.Body)
@@ -238,7 +238,7 @@ func TestMockOIDC_Token_CodeGrant_CodeChallengeHash(t *testing.T) {
 	badData, _ = url.ParseQuery(data.Encode())
 	badData.Set("code_verifier", "WRONG")
 
-	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, badData)
+	rr = testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, badData)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 
 	body, err = ioutil.ReadAll(rr.Body)
@@ -254,7 +254,7 @@ func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
 		"openid email profile", "sessionNonce", mockoidc.DefaultUser(), "", "")
 	refreshToken, _ := session.RefreshToken(m.Config(), m.Keypair, m.Now())
 
-	assert.HTTPError(t, m.Token, http.MethodPost, mockoidc.TokenEndpoint, nil)
+	assert.HTTPError(t, m.Token, http.MethodPost, m.EndpointConfig.TokenEndpoint, nil)
 
 	data := url.Values{}
 	data.Set("client_id", m.ClientID)
@@ -263,7 +263,7 @@ func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
 	data.Set("grant_type", "refresh_token")
 
 	// good request; check responses
-	rr := testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	rr := testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, data)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	tokenResp := make(map[string]interface{})
@@ -294,7 +294,7 @@ func TestMockOIDC_Token_RefreshGrant(t *testing.T) {
 
 	data.Set("refresh_token", expiredToken)
 
-	rr = testResponse(t, mockoidc.TokenEndpoint, m.Token, http.MethodPost, data)
+	rr = testResponse(t, m.EndpointConfig.TokenEndpoint, m.Token, http.MethodPost, data)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 
 	body, err := ioutil.ReadAll(rr.Body)

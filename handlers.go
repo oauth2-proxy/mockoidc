@@ -12,14 +12,37 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const (
-	IssuerBase            = "/oidc"
-	AuthorizationEndpoint = "/oidc/authorize"
-	TokenEndpoint         = "/oidc/token"
-	UserinfoEndpoint      = "/oidc/userinfo"
-	JWKSEndpoint          = "/oidc/.well-known/jwks.json"
-	DiscoveryEndpoint     = "/oidc/.well-known/openid-configuration"
+type EndpointConfig struct {
+	IssuerBase            string `json:"issuer"`
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
+	JWKSEndpoint          string `json:"jwks_uri"`
+	DiscoveryEndpoint     string
+}
 
+func (e *EndpointConfig) Defaults() {
+	if e.IssuerBase == "" {
+		e.IssuerBase = "/oidc"
+	}
+	if e.AuthorizationEndpoint == "" {
+		e.AuthorizationEndpoint = e.IssuerBase + "/authorize"
+	}
+	if e.TokenEndpoint == "" {
+		e.TokenEndpoint = e.IssuerBase + "/token"
+	}
+	if e.UserinfoEndpoint == "" {
+		e.UserinfoEndpoint = e.IssuerBase + "/userinfo"
+	}
+	if e.JWKSEndpoint == "" {
+		e.JWKSEndpoint = e.IssuerBase + "/.well-known/jwks.json"
+	}
+	if e.DiscoveryEndpoint == "" {
+		e.DiscoveryEndpoint = e.IssuerBase + "/.well-known/openid-configuration"
+	}
+}
+
+const (
 	InvalidRequest       = "invalid_request"
 	InvalidClient        = "invalid_client"
 	InvalidGrant         = "invalid_grant"

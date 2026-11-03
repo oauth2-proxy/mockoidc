@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -37,6 +39,8 @@ type MockOIDC struct {
 	tlsConfig   *tls.Config
 	middleware  []func(http.Handler) http.Handler
 	fastForward time.Duration
+
+	EndpointConfig EndpointConfig
 }
 
 // Config gives the various settings MockOIDC starts with that a test
@@ -69,6 +73,9 @@ func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 		return nil, err
 	}
 
+	ecfg := EndpointConfig{}
+	ecfg.Defaults()
+
 	return &MockOIDC{
 		ClientID:                      clientID,
 		ClientSecret:                  clientSecret,
@@ -79,6 +86,7 @@ func NewServer(key *rsa.PrivateKey) (*MockOIDC, error) {
 		SessionStore:                  NewSessionStore(),
 		UserQueue:                     &UserQueue{},
 		ErrorQueue:                    &ErrorQueue{},
+		EndpointConfig:                ecfg,
 	}, nil
 }
 
@@ -108,12 +116,20 @@ func (m *MockOIDC) Start(ln net.Listener, cfg *tls.Config) error {
 		return errors.New("server already started")
 	}
 
+	var pathOf = func(s string) string {
+		u, err := url.Parse(s)
+		if err != nil {
+			return s
+		}
+		return u.Path
+	}
+
 	handler := http.NewServeMux()
-	handler.Handle(AuthorizationEndpoint, m.chainMiddleware(m.Authorize))
-	handler.Handle(TokenEndpoint, m.chainMiddleware(m.Token))
-	handler.Handle(UserinfoEndpoint, m.chainMiddleware(m.Userinfo))
-	handler.Handle(JWKSEndpoint, m.chainMiddleware(m.JWKS))
-	handler.Handle(DiscoveryEndpoint, m.chainMiddleware(m.Discovery))
+	handler.Handle(pathOf(m.EndpointConfig.AuthorizationEndpoint), m.chainMiddleware(m.Authorize))
+	handler.Handle(pathOf(m.EndpointConfig.TokenEndpoint), m.chainMiddleware(m.Token))
+	handler.Handle(pathOf(m.EndpointConfig.UserinfoEndpoint), m.chainMiddleware(m.Userinfo))
+	handler.Handle(pathOf(m.EndpointConfig.JWKSEndpoint), m.chainMiddleware(m.JWKS))
+	handler.Handle(pathOf(m.EndpointConfig.DiscoveryEndpoint), m.chainMiddleware(m.Discovery))
 
 	m.Server = &http.Server{
 		Addr:      ln.Addr().String(),
@@ -205,12 +221,21 @@ func (m *MockOIDC) Addr() string {
 	return fmt.Sprintf("%s://%s", proto, m.Server.Addr)
 }
 
+// applyBase adds a the server scheme and host to the given url, unless it is already absolute.
+func (m *MockOIDC) applyBase(u string) string {
+	if strings.Contains(u, "://") {
+		return u
+	}
+
+	return m.Addr() + u
+}
+
 // Issuer returns the OIDC Issuer that will be in `iss` token claims
 func (m *MockOIDC) Issuer() string {
 	if m.Server == nil {
 		return ""
 	}
-	return m.Addr() + IssuerBase
+	return m.applyBase(m.EndpointConfig.IssuerBase)
 }
 
 // DiscoveryEndpoint returns the full `/.well-known/openid-configuration` URL
@@ -218,7 +243,7 @@ func (m *MockOIDC) DiscoveryEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
-	return m.Addr() + DiscoveryEndpoint
+	return m.applyBase(m.EndpointConfig.DiscoveryEndpoint)
 }
 
 // AuthorizationEndpoint returns the OIDC `authorization_endpoint`
@@ -226,7 +251,7 @@ func (m *MockOIDC) AuthorizationEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
-	return m.Addr() + AuthorizationEndpoint
+	return m.applyBase(m.EndpointConfig.AuthorizationEndpoint)
 }
 
 // TokenEndpoint returns the OIDC `token_endpoint`
@@ -234,7 +259,7 @@ func (m *MockOIDC) TokenEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
-	return m.Addr() + TokenEndpoint
+	return m.applyBase(m.EndpointConfig.TokenEndpoint)
 }
 
 // UserinfoEndpoint returns the OIDC `userinfo_endpoint`
@@ -242,7 +267,7 @@ func (m *MockOIDC) UserinfoEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
-	return m.Addr() + UserinfoEndpoint
+	return m.applyBase(m.EndpointConfig.UserinfoEndpoint)
 }
 
 // JWKSEndpoint returns the OIDC `jwks_uri`
@@ -250,7 +275,7 @@ func (m *MockOIDC) JWKSEndpoint() string {
 	if m.Server == nil {
 		return ""
 	}
-	return m.Addr() + JWKSEndpoint
+	return m.applyBase(m.EndpointConfig.JWKSEndpoint)
 }
 
 func (m *MockOIDC) chainMiddleware(endpoint func(http.ResponseWriter, *http.Request)) http.Handler {
