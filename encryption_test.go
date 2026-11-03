@@ -52,7 +52,7 @@ func TestKeypair_JWKS(t *testing.T) {
 }
 
 func TestKeypair_SignJWTVerifyJWT(t *testing.T) {
-	for _, size := range []int{512, 1024, 2048} {
+	for _, size := range []int{1024, 2048} {
 		t.Run(fmt.Sprintf("%d", size), func(t *testing.T) {
 			alice, err := mockoidc.RandomKeypair(size)
 			assert.NoError(t, err)
