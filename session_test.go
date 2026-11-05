@@ -194,3 +194,50 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, session)
 }
+
+func TestSession_IDToken_CustomUser(t *testing.T) {
+	// very similar to `dummySession` above but uses
+	// `CustomTestUser` instead of `DefaultUser` so an
+	// additional claim can be added
+	customSession := &mockoidc.Session{
+		SessionID: "DefaultSessionId",
+		Scopes:    []string{"openid", "email", "profile", "groups"},
+		User:      &CustomTestUser{
+			MockUser: *mockoidc.DefaultUser(),
+			PhoneVerified: true,
+		},
+	}
+
+	// register the custom claim
+	mockoidc.ClaimsSupported = append(mockoidc.ClaimsSupported, "phone_verified")
+
+	keypair, _ := mockoidc.DefaultKeypair()
+	tokenString, err := customSession.IDToken(dummyConfig, keypair, mockoidc.NowFunc())
+	assert.NoError(t, err)
+
+	token, err := keypair.VerifyJWT(tokenString, mockoidc.NowFunc)
+	assert.NoError(t, err)
+	assert.True(t, token.Valid)
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	assert.True(t, ok)
+	assert.NotNil(t, claims)
+
+	assert.Equal(t, customSession.SessionID, claims["jti"])
+	claimsAudience, err := claims.GetAudience()
+	assert.NoError(t, err)
+	assert.Equal(t, jwt.ClaimStrings{dummyConfig.ClientID}, claimsAudience)
+	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
+	assert.Equal(t, customSession.User.ID(), claims["sub"])
+
+	u := customSession.User.(*CustomTestUser)
+	assert.Equal(t, u.PreferredUsername, claims["preferred_username"])
+	assert.Equal(t, u.Address, claims["address"])
+	assert.Equal(t, u.Phone, claims["phone_number"])
+	// check for the additional claim added by CustomTestUser
+	assert.Equal(t, u.PhoneVerified, claims["phone_verified"])
+
+	groups, ok := claims["groups"].([]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, len(groups), 2)
+}
